@@ -246,6 +246,62 @@ the next lever per that same doc is draw distance/crowd counts (fewer/
 further-culled villagers, a smaller ocean plane or coarser subdivision),
 and the one after that is asking what GPU it's actually running on.
 
+### Round two: confirmed integrated-only GPU (no discrete card) — quality tuning wasn't enough, disabled outright
+
+The report that came back after round one: no measurable change, still
+~5-6 fps. Two things turned out to be true at once: (a) the round-one
+commit had never actually reached the tester's checkout — `git pull`
+failed with a merge conflict on `project.godot`/`environment/
+world_environment.tres` (Godot's own editor rewrites small parts of these
+on open, e.g. UID cache entries, which collided with the checked-in
+changes) — so round one was never actually running; and (b) once that was
+untangled, the hardware was confirmed to be **integrated Intel graphics
+only, no discrete GPU at all** (a Dell Latitude 5411 in its base
+configuration). That second fact means round one's approach — reduce
+SDFGI cascades/cell density, lower SSAO/SSIL quality tiers — was always
+going to be insufficient on its own: integrated GPUs share system memory
+bandwidth and have far fewer compute units than any discrete card, and are
+specifically, disproportionately bad at exactly the two techniques this
+project leaned on hardest (SDFGI's real-time 3D voxel cone tracing, and
+volumetric fog's raymarched froxel grid) — reducing their quality knobs
+doesn't change that they're fundamentally the wrong tool for this class of
+hardware, only outright disabling them does.
+
+Round two, in `environment/world_environment.tres`: `sdfgi_enabled`,
+`volumetric_fog_enabled`, and `ssao_enabled` all set to **false** (`ssil_enabled`
+was already false from round one). `ambient_light_source = 2` (sky-driven
+ambient) is untouched and still lights every surface without SDFGI's
+dynamic bounce contribution; `fog_enabled` (a flat, depth-based color
+blend — not raymarched, nowhere near the same cost class as volumetric
+fog) stays on for cheap atmosphere. In `project.godot`: shadow quality
+filter `1 → 0`, shadow map size `2048 → 1024`, SSAO/SSIL quality knobs now
+irrelevant (disabled) but zeroed anyway, resolution scale `0.65 → 0.5`.
+
+**Deliberately not attempted, and why:** switching `renderer/
+rendering_method` from `"forward_plus"` to `"mobile"` — Godot's own
+built-in low-spec renderer target, which would likely help more than any
+individual toggle — was considered and set aside for this round. Custom
+shaders in this repo (`world/ocean/ocean.gdshader`'s `hint_screen_texture`/
+`hint_depth_texture` reads, in particular) have compatibility surface
+between Forward+ and Mobile that this sandbox has no way to verify without
+real hardware to actually render on; flipping the renderer method blind
+and shipping a possibly-broken shader compile to someone already dealing
+with a bad first impression was judged the wrong trade. Flagged here as
+the next real lever if disabling SDFGI/volumetric fog still isn't enough,
+not silently skipped.
+
+**Still honestly unverified from this end** — there is still no GPU, of
+any kind, integrated or discrete, in the sandbox these changes were made
+in. Every number above is reasoned from what SDFGI/volumetric fog/shadow
+mapping/SSAO are known to cost on integrated graphics in general, not
+measured on this specific machine. If this round still isn't enough, the
+concrete next steps, in order: confirm this round actually reached the
+checkout this time (see the git note above — that failure mode can repeat
+on any future pull if local edits to these same two files exist again);
+try `renderer/rendering_method="mobile"` despite the shader-compatibility
+risk above; reduce villager count / ocean subdivision / island resolution
+(the "draw distance and crowd counts" lever round one deferred).
+
 ## Property names: verified, not assumed
 
 Godot 4.3's `Environment`/`ProceduralSkyMaterial` classes were not taken on
