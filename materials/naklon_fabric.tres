@@ -1,0 +1,24 @@
+[gd_resource type="ShaderMaterial" load_steps=2 format=3]
+
+[ext_resource type="Shader" path="res://shaders/naklon_reactive.gdshader" id="1"]
+
+[resource]
+shader = ExtResource("1")
+shader_parameter/albedo_mercy = Color(0.8, 0.76, 0.64, 1)
+shader_parameter/albedo_cruelty = Color(0.28, 0.1, 0.09, 1)
+shader_parameter/roughness_mercy = 0.9
+shader_parameter/roughness_cruelty = 0.4
+shader_parameter/metallic_mercy = 0.0
+shader_parameter/metallic_cruelty = 0.0
+shader_parameter/specular_mercy = 0.15
+shader_parameter/specular_cruelty = 0.85
+shader_parameter/crack_amount_mercy = 0.0
+shader_parameter/crack_amount_cruelty = 0.4
+shader_parameter/crack_scale = 22.0
+shader_parameter/crack_glow_color = Color(0.6, 0.1, 0.06, 1)
+shader_parameter/crack_glow_energy = 0.8
+shader_parameter/normal_strength_mercy = 0.15
+shader_parameter/normal_strength_cruelty = 0.6
+shader_parameter/rim_color_mercy = Color(1.0, 0.96, 0.86, 1)
+shader_parameter/rim_mercy = 0.9
+shader_parameter/rim_cruelty = 0.1

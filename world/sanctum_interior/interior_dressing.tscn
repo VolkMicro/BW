@@ -1,0 +1,48 @@
+[gd_scene load_steps=5 format=3]
+
+[ext_resource type="Script" path="res://world/sanctum_interior/interior_dressing.gd" id="1"]
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_pedestal"]
+albedo_color = Color(0.3, 0.28, 0.24, 1)
+roughness = 0.9
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_idol"]
+albedo_color = Color(0.5, 0.42, 0.3, 1)
+roughness = 0.55
+emission_enabled = true
+emission = Color(0.55, 0.78, 0.95, 1)
+emission_energy_multiplier = 0.0
+
+[sub_resource type="SphereShape3D" id="SphereShape3D_repair"]
+radius = 1.6
+
+[node name="InteriorDressing" type="Node3D"]
+script = ExtResource("1")
+
+[node name="Pedestal" type="CSGCylinder3D" parent="."]
+position = Vector3(0, 0.15, 0)
+radius = 0.55
+height = 0.3
+sides = 12
+material = SubResource("StandardMaterial3D_pedestal")
+use_collision = true
+
+[node name="IdolColumn" type="CSGCylinder3D" parent="."]
+position = Vector3(0, 0.8, 0)
+radius = 0.25
+height = 1.0
+sides = 8
+material = SubResource("StandardMaterial3D_idol")
+use_collision = true
+
+[node name="IdolHead" type="CSGSphere3D" parent="."]
+position = Vector3(0, 1.42, 0)
+radius = 0.28
+material = SubResource("StandardMaterial3D_idol")
+
+[node name="RepairPoint" type="Area3D" parent="."]
+monitoring = true
+monitorable = true
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="RepairPoint"]
+shape = SubResource("SphereShape3D_repair")

@@ -1,0 +1,22 @@
+[gd_resource type="Resource" script_class="AvatarSpecies" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://actors/avatar/species/avatar_species.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+id = &"sarv"
+display_name = "Sarv"
+one_line = "The elk who carries a harvest home that would otherwise break a family's back."
+base_learning_rate = 0.35
+start_attachment_watching = 0.5
+start_attachment_toothy = 0.2
+start_attachment_kind = 0.45
+base_strength = 1.05
+base_speed = 1.05
+base_stamina = 1.5
+base_scale = 1.1
+feeds_villages = true
+devotion_yield_per_feed_action = 1.5
+color_primary = Color(0.42, 0.32, 0.19, 1)
+color_accent = Color(0.75, 0.7, 0.6, 1)
+body_notes = "Placeholder low-poly elk: BoxMesh torso, angled CapsuleMesh neck, BoxMesh head, four long CylinderMesh legs, two branching thin CylinderMesh antlers. Pending real sculpted/scanned art — see docs/systems/avatar.md Scoped out."

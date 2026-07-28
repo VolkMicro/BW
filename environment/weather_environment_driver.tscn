@@ -1,0 +1,6 @@
+[gd_scene load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://environment/weather_environment_driver.gd" id="1"]
+
+[node name="WeatherEnvironmentDriver" type="Node"]
+script = ExtResource("1")

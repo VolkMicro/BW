@@ -1,0 +1,59 @@
+[gd_scene load_steps=8 format=3]
+
+[ext_resource type="Environment" path="res://environment/world_environment.tres" id="1"]
+[ext_resource type="Script" path="res://world/ocean/ocean_surface.gd" id="2"]
+[ext_resource type="Script" path="res://world/ocean/river_surface.gd" id="3"]
+
+[sub_resource type="CylinderMesh" id="CylinderMesh_island"]
+top_radius = 18.0
+bottom_radius = 52.0
+height = 34.0
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_island"]
+albedo_color = Color(0.36, 0.33, 0.24, 1)
+roughness = 0.95
+
+[sub_resource type="BoxMesh" id="BoxMesh_reef"]
+size = Vector3(5, 3, 5)
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_reef"]
+albedo_color = Color(0.32, 0.3, 0.28, 1)
+roughness = 0.9
+
+[node name="OceanDemo" type="Node3D"]
+
+[node name="WorldEnvironment" type="WorldEnvironment" parent="."]
+environment = ExtResource("1")
+
+[node name="Sun" type="DirectionalLight3D" parent="."]
+transform = Transform3D(0.72, -0.5, 0.48, 0, 0.69, 0.72, -0.69, -0.52, 0.5, 0, 40, 0)
+light_energy = 1.4
+light_angular_distance = 0.6
+shadow_enabled = true
+
+[node name="Camera3D" type="Camera3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 0.86, 0.51, 0, -0.51, 0.86, 0, 85, 140)
+fov = 55.0
+current = true
+
+[node name="Island" type="MeshInstance3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 4, 0)
+mesh = SubResource("CylinderMesh_island")
+surface_material_override/0 = SubResource("StandardMaterial3D_island")
+
+[node name="Reef" type="MeshInstance3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 45, 0.4, -18)
+mesh = SubResource("BoxMesh_reef")
+surface_material_override/0 = SubResource("StandardMaterial3D_reef")
+
+[node name="OceanSurface" type="MeshInstance3D" parent="."]
+script = ExtResource("2")
+size = Vector2(700, 700)
+subdivisions = 140
+
+[node name="RiverInlet" type="MeshInstance3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.05, 0)
+script = ExtResource("3")
+control_points = PackedVector3Array(28, 0.6, 8, 52, 0.1, 22, 78, -0.2, 30, 108, -0.4, 42, 145, -0.5, 58)
+width = 9.0
+segments_per_span = 10

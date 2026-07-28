@@ -1,0 +1,40 @@
+[gd_scene load_steps=3 format=3]
+
+[ext_resource type="Script" path="res://modes/skirmish/skirmish_scenario_demo.gd" id="1"]
+[ext_resource type="Script" path="res://modes/skirmish/skirmish_scenario.gd" id="2"]
+
+[node name="SkirmishScenarioDemo" type="Node"]
+script = ExtResource("1")
+
+[node name="SkirmishScenario" type="Node" parent="."]
+script = ExtResource("2")
+session_duration_sec = 180.0
+opponent_mode = 1
+autostart = false
+louhi_evaluation_interval_sec = 8.0
+louhi_tier1_patience_sec = 30.0
+louhi_tier2_patience_sec = 40.0
+louhi_post_resolution_cooldown_sec = 15.0
+
+[node name="UI" type="CanvasLayer" parent="."]
+
+[node name="StatusLabel" type="Label" parent="UI"]
+offset_left = 20.0
+offset_top = 20.0
+offset_right = 900.0
+offset_bottom = 90.0
+text = "Loading skirmish..."
+
+[node name="FeedLabel" type="Label" parent="UI"]
+offset_left = 20.0
+offset_top = 100.0
+offset_right = 900.0
+offset_bottom = 640.0
+text = ""
+
+[node name="HelpLabel" type="Label" parent="UI"]
+offset_left = 20.0
+offset_top = 660.0
+offset_right = 1300.0
+offset_bottom = 780.0
+text = "A bounded skirmish session: SkirmishScenario spawns real Village resources into the real GameState/Reach/Naklon (no parallel state), plus a real, skirmish-paced LouhiDirector opponent (package N's actual script, retuned faster). Every ~6s this demo simulates 'a player tending a village' via the same Reach.convert_via_help() any real conversion uses, standing in for real player input, which this package does not read. Watch Louhi react, relent, or escalate against a real bounded timer; a rematch starts automatically a few seconds after the session ends."

@@ -1,0 +1,22 @@
+[gd_resource type="Resource" script_class="AvatarSpecies" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://actors/avatar/species/avatar_species.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+id = &"krukk"
+display_name = "Krukk"
+one_line = "The raven who learns in one telling and forgets just as fast if you stop telling it."
+base_learning_rate = 0.6
+start_attachment_watching = 0.65
+start_attachment_toothy = 0.25
+start_attachment_kind = 0.3
+base_strength = 0.45
+base_speed = 1.35
+base_stamina = 0.65
+base_scale = 0.55
+feeds_villages = false
+devotion_yield_per_feed_action = 0.0
+color_primary = Color(0.05, 0.048, 0.055, 1)
+color_accent = Color(0.35, 0.29, 0.09, 1)
+body_notes = "Placeholder low-poly raven: elongated SphereMesh body, small SphereMesh head, cone-shaped CylinderMesh beak, two flat BoxMesh wings, thin BoxMesh tail, two thin CylinderMesh legs. Pending real sculpted/scanned art — see docs/systems/avatar.md Scoped out."

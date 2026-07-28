@@ -1,0 +1,61 @@
+[gd_scene load_steps=10 format=3]
+
+[ext_resource type="Environment" path="res://environment/world_environment.tres" id="1"]
+[ext_resource type="Script" path="res://shaders/naklon_demo.gd" id="2"]
+[ext_resource type="Script" path="res://shaders/naklon_shader_driver.gd" id="3"]
+[ext_resource type="ShaderMaterial" path="res://materials/naklon_rock.tres" id="4"]
+[ext_resource type="ShaderMaterial" path="res://materials/naklon_timber.tres" id="5"]
+[ext_resource type="ShaderMaterial" path="res://materials/naklon_fabric.tres" id="6"]
+
+[sub_resource type="SphereMesh" id="SphereMesh_rock"]
+radius = 0.6
+height = 1.2
+
+[sub_resource type="CylinderMesh" id="CylinderMesh_timber"]
+top_radius = 0.35
+bottom_radius = 0.35
+height = 1.4
+
+[sub_resource type="PlaneMesh" id="PlaneMesh_fabric"]
+size = Vector2(1.2, 1.6)
+subdivide_width = 8
+subdivide_depth = 8
+
+[node name="NaklonDemo" type="Node3D"]
+script = ExtResource("2")
+
+[node name="WorldEnvironment" type="WorldEnvironment" parent="."]
+environment = ExtResource("1")
+
+[node name="Sun" type="DirectionalLight3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 0.7071067, 0.7071067, 0, -0.7071067, 0.7071067, 0, 5, 0)
+shadow_enabled = true
+
+[node name="Camera3D" type="Camera3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 0.9396926, 0.3420201, 0, -0.3420201, 0.9396926, 0, 1.6, 4.2)
+current = true
+
+[node name="NaklonShaderDriver" type="Node" parent="."]
+script = ExtResource("3")
+
+[node name="RockDemo" type="MeshInstance3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -1.6, 0.6, 0)
+mesh = SubResource("SphereMesh_rock")
+material_override = ExtResource("4")
+
+[node name="TimberDemo" type="MeshInstance3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.7, 0)
+mesh = SubResource("CylinderMesh_timber")
+material_override = ExtResource("5")
+
+[node name="FabricDemo" type="MeshInstance3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 1.6, 0.6, 0)
+mesh = SubResource("PlaneMesh_fabric")
+material_override = ExtResource("6")
+
+[node name="NaklonReadout" type="Label3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 2.2, 0)
+text = "Naklon: 0.00  (unit 0.50)"
+font_size = 48
+outline_size = 8
+billboard = 1

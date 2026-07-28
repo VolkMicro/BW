@@ -1,0 +1,37 @@
+[gd_scene load_steps=6 format=3]
+
+[ext_resource type="Environment" path="res://environment/world_environment.tres" id="1"]
+[ext_resource type="Script" path="res://world/sanctum/sanctum_demo.gd" id="2"]
+[ext_resource type="PackedScene" path="res://world/sanctum/sanctum.tscn" id="3"]
+
+[sub_resource type="PlaneMesh" id="PlaneMesh_ground"]
+size = Vector2(120, 120)
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_ground"]
+albedo_color = Color(0.24, 0.28, 0.18, 1)
+roughness = 1.0
+
+[node name="SanctumDemo" type="Node3D"]
+script = ExtResource("2")
+
+[node name="WorldEnvironment" type="WorldEnvironment" parent="."]
+environment = ExtResource("1")
+
+[node name="Sun" type="DirectionalLight3D" parent="."]
+transform = Transform3D(0.72, -0.5, 0.48, 0, 0.69, 0.72, -0.69, -0.52, 0.5, 0, 30, 0)
+light_energy = 1.4
+light_angular_distance = 0.6
+shadow_enabled = true
+
+[node name="DemoCamera" type="Camera3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 0.82, 0.57, 0, -0.57, 0.82, 0, 14, 24)
+fov = 55.0
+current = true
+
+[node name="Ground" type="MeshInstance3D" parent="."]
+position = Vector3(0, -0.05, 0)
+mesh = SubResource("PlaneMesh_ground")
+surface_material_override/0 = SubResource("StandardMaterial3D_ground")
+
+[node name="Sanctum" parent="." instance=ExtResource("3")]
+village_id = &"demo_fen_hollow"

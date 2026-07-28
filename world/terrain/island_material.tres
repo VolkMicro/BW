@@ -1,0 +1,31 @@
+[gd_resource type="ShaderMaterial" load_steps=11 format=3]
+
+[ext_resource type="Shader" path="res://world/terrain/terrain_triplanar.gdshader" id="1"]
+[ext_resource type="Texture2D" path="res://assets/textures/terrain/grass/Grass004_1K-JPG_Color.jpg" id="2"]
+[ext_resource type="Texture2D" path="res://assets/textures/terrain/grass/Grass004_1K-JPG_NormalGL.jpg" id="3"]
+[ext_resource type="Texture2D" path="res://assets/textures/terrain/grass/Grass004_1K-JPG_Roughness.jpg" id="4"]
+[ext_resource type="Texture2D" path="res://assets/textures/terrain/rock/Rock023_1K-JPG_Color.jpg" id="5"]
+[ext_resource type="Texture2D" path="res://assets/textures/terrain/rock/Rock023_1K-JPG_NormalGL.jpg" id="6"]
+[ext_resource type="Texture2D" path="res://assets/textures/terrain/rock/Rock023_1K-JPG_Roughness.jpg" id="7"]
+[ext_resource type="Texture2D" path="res://assets/textures/terrain/sand/Ground054_1K-JPG_Color.jpg" id="8"]
+[ext_resource type="Texture2D" path="res://assets/textures/terrain/sand/Ground054_1K-JPG_NormalGL.jpg" id="9"]
+[ext_resource type="Texture2D" path="res://assets/textures/terrain/sand/Ground054_1K-JPG_Roughness.jpg" id="10"]
+
+[resource]
+shader = ExtResource("1")
+shader_parameter/naklon_unit = 0.0
+shader_parameter/grass_albedo = ExtResource("2")
+shader_parameter/grass_normal = ExtResource("3")
+shader_parameter/grass_rough = ExtResource("4")
+shader_parameter/rock_albedo = ExtResource("5")
+shader_parameter/rock_normal = ExtResource("6")
+shader_parameter/rock_rough = ExtResource("7")
+shader_parameter/sand_albedo = ExtResource("8")
+shader_parameter/sand_normal = ExtResource("9")
+shader_parameter/sand_rough = ExtResource("10")
+shader_parameter/texture_scale = 0.08
+shader_parameter/sand_height = 1.5
+shader_parameter/rock_slope_start = 0.55
+shader_parameter/rock_slope_end = 0.35
+shader_parameter/blend_sharpness = 4.0
+shader_parameter/sea_level = 0.0
