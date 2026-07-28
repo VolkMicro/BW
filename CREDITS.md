@@ -10,31 +10,29 @@ in this project.
 
 | Asset | Source | Author | License | Used for |
 |---|---|---|---|---|
-| _(populated as world/terrain, world/ocean, world/sanctum packages pull real scans)_ | ambientCG (https://ambientcg.com) / Poly Haven (https://polyhaven.com) | see individual asset pages, all CC0 | CC0 1.0 | terrain, rock, wood, fabric materials |
+| Grass 004 (1K-JPG: Color, NormalGL, Roughness) | https://ambientcg.com/a/Grass004 | ambientCG (Lennart Demes) | CC0 1.0 | `world/terrain/` — flat/rolling ground cover, `assets/textures/terrain/grass/` |
+| Rock 023 (1K-JPG: Color, NormalGL, Roughness) | https://ambientcg.com/a/Rock023 | ambientCG (Lennart Demes) | CC0 1.0 | `world/terrain/` — cliff faces, steep slopes, `assets/textures/terrain/rock/` |
+| Ground 054 (1K-JPG: Color, NormalGL, Roughness) | https://ambientcg.com/a/Ground054 | ambientCG (Lennart Demes) | CC0 1.0 | `world/terrain/` — beach/low-elevation flat ground, `assets/textures/terrain/sand/` |
+
+No other package pulled a texture — `docs/systems/art_direction.md`, `ocean.md`, and `sanctum.md` all confirm their materials are procedural/code-generated or plain `StandardMaterial3D` colors, not downloaded scans.
 
 ## HDRIs
 
-| Asset | Source | Author | License | Used for |
-|---|---|---|---|---|
-| _(populated by rendering/art-direction package)_ | Poly Haven (https://polyhaven.com) | see individual HDRI pages, all CC0 | CC0 1.0 | sky/lighting reference |
+None pulled this pass. `environment/world_environment.tres` uses a procedural `ProceduralSkyMaterial`, not an HDRI; no package's own doc lists one.
 
 ## Models / props
 
-| Asset | Source | Author | License | Used for |
-|---|---|---|---|---|
-| _(populated as needed)_ | Kenney (https://kenney.nl) | Kenney Vleugels | CC0 1.0 | prop placeholders |
+None pulled this pass. Every actor/prop in the repo (Hand, villagers, Avatar, Sanctum, standing stones, etc.) is built from Godot primitive meshes (`CapsuleMesh`/`BoxMesh`/`SphereMesh`/CSG) per each package's own "Assets used" section — see `docs/systems/`.
 
 ## Audio (SFX)
 
 | Asset | Source | Author | License | Attribution required? |
 |---|---|---|---|---|
-| _(populated by audio package)_ | Freesound (https://freesound.org) / Kenney | see individual pages | varies (CC0 / CC-BY — see per-file note) | CC-BY entries get a spoken/credits-screen line here |
+| `audio/sfx/bong_001.ogg` (from Kenney's "Interface Sounds" pack) | https://kenney.nl/assets/interface-sounds | Kenney (Kenney Vleugels) | CC0 1.0 | No — CC0; a Kenney credit is requested but not mandatory per the pack's own License.txt |
 
 ## Music
 
-| Asset | Source | Author | License | Attribution required? |
-|---|---|---|---|---|
-| _(populated by audio package)_ | Musopen (https://musopen.org) / self-composed adaptive stems | see per-track note | Public Domain / CC0 / original | n/a or credited |
+None. `docs/systems/audio.md` documents an exhaustive, recorded search (Kenney's full Audio category, Freesound, Musopen) that turned up no usable, rights-clear prayer/infernal music bed; `audio/music_director.gd`'s four continuous layers (prayer, infernal, wind, sea) are runtime-synthesized via `AudioStreamGenerator`, not sourced files, so there is nothing here that traces to a third-party license. See that doc's "Honesty: what's real vs. placeholder" section for the full record and the follow-up this leaves for a future audio pass.
 
 ## Engine & tools
 

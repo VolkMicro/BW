@@ -1,5 +1,16 @@
 shader_type spatial;
-render_mode cull_back, diffuse_burley, specular_schlick_ggx;
+// cull_disabled (not cull_back): a heightfield mesh is single-valued per
+// (x,z) so it can never truly overhang, but ridged/high-frequency noise
+// can still put a triangle's local slope near-vertical for a couple of
+// grid cells at a time. From a normal outdoor camera angle those cells'
+// winding-derived face normal can point just past horizontal, away from
+// the camera, and cull_back would drop them — visible as small holes
+// straight through to the sea/sky rather than a smoothly shaded steep
+// slope. Terrain is cheap enough per-triangle that rendering both sides
+// is the safe, standard fix (see world/terrain/island_generator.gd's
+// blend-weight comment for the complementary fix: keeping slopes gentler
+// in the first place).
+render_mode cull_disabled, diffuse_burley, specular_schlick_ggx;
 
 // Naklon-reactive island terrain: triplanar-blended grass / rock / sand by
 // world-space normal (slope) and height, re-balanced by `naklon_unit`.

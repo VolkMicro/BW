@@ -136,27 +136,64 @@ void fragment() {
 	vec3 base_color = mix(refracted, water_color, clamp(shallow_mix * 1.4, 0.0, 1.0));
 
 	// Small procedural ripple detail (no external normal map — see docs).
+	// `fbm()` is evaluated at full frequency per-fragment with no mip/LOD
+	// concept of its own, so from a wide god-view distance (one fragment
+	// covering many meters of world space) it aliases into a repeating,
+	// tiled-looking pattern rather than a blur — worse still under this
+	// project's software `llvmpipe` rasterizer, which has no analytic
+	// filtering to soften it (docs/rendering.md). `detail_fade` rolls the
+	// micro-normal and foam-breakup terms down with distance to camera —
+	// standard "fade detail with distance" practice — while leaving
+	// close-up behavior (the only range `world/ocean/ocean_demo.tscn` was
+	// ever screenshotted at) completely unchanged.
+	float dist_to_cam = length(VERTEX - CAMERA_POSITION_WORLD);
+	float detail_fade = 1.0 - smoothstep(40.0, 150.0, dist_to_cam);
+
 	vec2 e = vec2(0.08, 0.0);
 	float n_c = fbm(v_world_xz * micro_normal_scale + TIME * 0.05, 4);
 	float n_x = fbm((v_world_xz + e.xy) * micro_normal_scale + TIME * 0.05, 4);
 	float n_z = fbm((v_world_xz + e.yx) * micro_normal_scale + TIME * 0.05, 4);
 	vec3 micro_n = vec3(n_c - n_x, 1.0, n_c - n_z);
-	vec3 shaded_normal = normalize(NORMAL + micro_n * micro_normal_strength * vec3(1.0, 0.0, 1.0));
+	vec3 shaded_normal = normalize(NORMAL + micro_n * micro_normal_strength * detail_fade * vec3(1.0, 0.0, 1.0));
 
 	float shore_foam = 1.0 - smoothstep(0.0, foam_distance, depth_diff);
 	float crest_foam = smoothstep(foam_crest_threshold, foam_crest_threshold + foam_crest_softness, v_wave_height_norm);
 	float foam_mask = clamp(shore_foam + crest_foam, 0.0, 1.0);
-	float breakup = fbm(v_world_xz * foam_noise_scale + TIME * 0.15, 4);
+	float breakup = mix(1.0, fbm(v_world_xz * foam_noise_scale + TIME * 0.15, 4), detail_fade);
 	foam_mask *= mix(0.65, 1.0, breakup);
 
 	vec3 final_color = mix(base_color, foam_color.rgb, clamp(foam_mask, 0.0, 1.0));
 
-	float fresnel = pow(1.0 - clamp(dot(shaded_normal, VIEW), 0.0, 1.0), fresnel_power);
+	// fresnel responds to shaded_normal, which tilts through the same exact
+	// six-wave periodic cycle everywhere on the plane — at the shallow,
+	// distant grazing angles a wide god-view uses over hundreds of meters
+	// of open water, that periodic tilt reads as a regular light/dark band
+	// pattern (this is the dominant driver of the "tiled" look, more than
+	// the specular term above: it persists even at high ROUGHNESS since
+	// fresnel here is a albedo-mix, not a specular lobe). Capping the
+	// grazing-angle falloff distance itself (fewer terms need dot(N,V)→0
+	// to read as "fully grazing") softens that periodic band into a
+	// gentler, less regularly-repeating gradient without changing the
+	// close-range fresnel rim ocean_demo.tscn was tuned against.
+	float fresnel_dot = clamp(dot(shaded_normal, VIEW), mix(0.0, 0.25, 1.0 - detail_fade), 1.0);
+	float fresnel = pow(1.0 - fresnel_dot, fresnel_power);
 	final_color = mix(final_color, mix(final_color, fresnel_tint, 0.6), fresnel);
+
+	// The analytic Gerstner normal itself is periodic by construction (six
+	// summed waves, each an exact sine), and specular response to a
+	// periodic normal at a distance/grazing angle aliases into a repeating
+	// moire of bright flecks — a harder, separate problem from the fbm
+	// detail faded above (this persists even with micro-detail fully faded
+	// out at long range). The standard mitigation for specular aliasing
+	// on a surface a mip/LOD can't help (there is no texture here to mip)
+	// is to broaden the effective roughness with distance so the
+	// highlight spreads out instead of aliasing into sharp, per-fragment
+	// on/off flecks — a real light-response change, not a texture fix.
+	float distance_roughen = mix(0.5, 0.0, detail_fade);
 
 	ALBEDO = final_color;
 	NORMAL = shaded_normal;
-	ROUGHNESS = mix(roughness_base, 0.85, foam_mask);
+	ROUGHNESS = clamp(mix(roughness_base, 0.85, foam_mask) + distance_roughen, 0.0, 1.0);
 	METALLIC = 0.02;
 	SPECULAR = mix(0.5, 0.1, foam_mask);
 	ALPHA = 1.0;

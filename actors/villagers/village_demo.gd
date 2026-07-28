@@ -59,5 +59,12 @@ func _spawn_villagers(village_id: StringName, count: int) -> void:
 	for i in range(count):
 		var villager: Villager = VILLAGER_SCENE.instantiate()
 		villager.village_id = village_id
-		villager.global_position = base + Vector3(randf_range(-2.0, 2.0), 0.0, randf_range(-2.0, 2.0))
+		# add_child() BEFORE setting global_position — Node3D.global_position
+		# needs the node inside the SceneTree (Godot logs "Condition
+		# !is_inside_tree()" and no-ops otherwise); the reverse order here
+		# silently left every spawned villager at the origin. Found and fixed
+		# during the integration pass's godot --check-only run (see
+		# docs/systems/integration.md), same class of bug as the
+		# actors/avatar/combat/avatar_combatant.gd state_text fix.
 		_villagers_root.add_child(villager)
+		villager.global_position = base + Vector3(randf_range(-2.0, 2.0), 0.0, randf_range(-2.0, 2.0))

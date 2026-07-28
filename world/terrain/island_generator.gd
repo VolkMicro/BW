@@ -50,20 +50,32 @@ func _build_noise() -> void:
 	_continent_noise.fractal_gain = 0.5
 	_continent_noise.fractal_lacunarity = 2.0
 
+	# Ridge/detail octave counts below are capped so their finest octave's
+	# wavelength stays well above 2x the default grid step (size_meters /
+	# (resolution-1) = 256/128 = 2m). FRACTAL_RIDGED in particular turns
+	# undersampled high-frequency content into sharp, chaotic, disconnected-
+	# looking peaks rather than a gentle aliasing blur (verified: the
+	# previous 5-octave/2.1-lacunarity ridge setting put its finest octave
+	# at ~0.49 cycles/m, a ~2m wavelength sampled at a 2m grid step, which
+	# rendered as shredded/spiky terrain instead of a smooth ridged mound).
+	# If `resolution` or `size_meters` changes enough to move the grid step,
+	# re-check these against the same >=4-samples-per-wavelength target
+	# (i.e. keep each noise's finest-octave frequency below roughly
+	# 1 / (4 * grid_step)).
 	_ridge_noise = FastNoiseLite.new()
 	_ridge_noise.seed = island_seed + 1013
 	_ridge_noise.noise_type = FastNoiseLite.TYPE_SIMPLEX
 	_ridge_noise.frequency = 0.025 / maxf(ridge_noise_scale, 0.001)
 	_ridge_noise.fractal_type = FastNoiseLite.FRACTAL_RIDGED
-	_ridge_noise.fractal_octaves = 5
+	_ridge_noise.fractal_octaves = 3
 	_ridge_noise.fractal_gain = 0.55
 	_ridge_noise.fractal_lacunarity = 2.1
 
 	_detail_noise = FastNoiseLite.new()
 	_detail_noise.seed = island_seed + 7331
 	_detail_noise.noise_type = FastNoiseLite.TYPE_SIMPLEX
-	_detail_noise.frequency = 0.12 / maxf(detail_noise_scale, 0.001)
-	_detail_noise.fractal_octaves = 3
+	_detail_noise.frequency = 0.06 / maxf(detail_noise_scale, 0.001)
+	_detail_noise.fractal_octaves = 2
 	_detail_noise.fractal_gain = 0.45
 
 ## Height (meters, relative to sea_level; negative = sea floor) at a point in
@@ -84,7 +96,16 @@ func height_at(local_x: float, local_z: float) -> float:
 	var ridge := _ridge_noise.get_noise_2d(local_x, local_z) # ridged fractal, biased positive
 	var detail := _detail_noise.get_noise_2d(local_x, local_z) # small-scale roughness
 
-	var shaped := continent * 0.75 + ridge * 0.35 + detail * 0.06
+	# Ridge weight kept low relative to continent: FRACTAL_RIDGED has sharp
+	# creases (a derivative discontinuity right at each ridge line) that a
+	# heightfield mesh can only approximate with a real, short, steep V at
+	# the sample resolution, regardless of noise frequency. At the previous
+	# 0.35 weight against a 42m max_height those local slopes went steep
+	# enough to backface-cull from a normal outdoor camera angle (see
+	# terrain_triplanar.gdshader's cull_disabled note) and read as
+	# shredded holes rather than mountain relief. 0.2 keeps visible ridged
+	# character without the slope crossing that line.
+	var shaped := continent * 0.8 + ridge * 0.2 + detail * 0.04
 	var h := shaped * max_height * mask
 	# Outside the island mask, sink toward a plausible sea floor instead of a
 	# hard cliff at the heightmap's border.
