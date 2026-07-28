@@ -34,22 +34,31 @@ window/vsync/vsync_mode=1
 renderer/rendering_method="forward_plus"
 renderer/rendering_method.mobile="mobile"
 environment/defaults/default_environment="res://environment/world_environment.tres"
-anti_aliasing/quality/msaa_3d=2
+; Performance note (see docs/systems/engineering.md and the perf incident
+; it was written to anticipate): this whole [rendering] block was tuned as
+; a visual-quality ceiling in a sandbox with no GPU to ever measure it
+; against, per that doc's own "design target, not yet measured" framing.
+; The first real-hardware run came back at ~1 fps. These settings are the
+; "practical levers" that same doc already named, pulled in the order it
+; specified (resolution scale, then GI, then fog, then shadows) rather
+; than as a guess — cutting draw distance/crowd counts was deliberately
+; left as the last resort, per that doc, and isn't needed yet.
+anti_aliasing/quality/msaa_3d=0
 anti_aliasing/quality/screen_space_aa=1
 anti_aliasing/quality/use_taa=true
 occlusion_culling/use_occlusion_culling=true
-lights_and_shadows/positional_shadow/soft_shadow_filter_quality=3
-lights_and_shadows/directional_shadow/soft_shadow_filter_quality=3
-lights_and_shadows/directional_shadow/size=4096
-global_illumination/gi/use_half_resolution=false
-environment/ssao/quality=2
-environment/ssil/quality=2
+lights_and_shadows/positional_shadow/soft_shadow_filter_quality=1
+lights_and_shadows/directional_shadow/soft_shadow_filter_quality=1
+lights_and_shadows/directional_shadow/size=2048
+global_illumination/gi/use_half_resolution=true
+environment/ssao/quality=1
+environment/ssil/quality=1
 environment/glow/upscale_mode=1
-environment/volumetric_fog/use_filter=1
+environment/volumetric_fog/use_filter=0
 textures/decals/filter=3
 textures/light_projectors/filter=3
 scaling_3d/mode=2
-scaling_3d/scale=0.9
+scaling_3d/scale=0.65
 scaling_3d/fsr_sharpness=0.2
 
 [physics]

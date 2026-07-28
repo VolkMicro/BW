@@ -149,18 +149,31 @@ void fragment() {
 	float dist_to_cam = length(VERTEX - CAMERA_POSITION_WORLD);
 	float detail_fade = 1.0 - smoothstep(40.0, 150.0, dist_to_cam);
 
-	vec2 e = vec2(0.08, 0.0);
-	float n_c = fbm(v_world_xz * micro_normal_scale + TIME * 0.05, 4);
-	float n_x = fbm((v_world_xz + e.xy) * micro_normal_scale + TIME * 0.05, 4);
-	float n_z = fbm((v_world_xz + e.yx) * micro_normal_scale + TIME * 0.05, 4);
-	vec3 micro_n = vec3(n_c - n_x, 1.0, n_c - n_z);
+	// Actually SKIP the fbm work when fully faded, not just blend its
+	// result away — `mix(a, fbm(...), 0.0)` still pays for fbm() every
+	// fragment even when its output is discarded. Over an 800m plane seen
+	// from a wide god-view, most on-screen ocean fragments are past the
+	// 150m fade distance, so this branch is a real compute saving (4 fbm
+	// calls x 4 octaves each = 16 noise evaluations skipped per fragment
+	// out there), not just a visual tidy-up — this was flagged as a real,
+	// unaddressed cost during the perf pass that also cut sdfgi_cascades/
+	// project.godot's rendering quality (see docs/systems/performance_notes.md).
+	vec3 micro_n = vec3(0.0, 1.0, 0.0);
+	float breakup = 1.0;
+	if (detail_fade > 0.001) {
+		vec2 e = vec2(0.08, 0.0);
+		float n_c = fbm(v_world_xz * micro_normal_scale + TIME * 0.05, 4);
+		float n_x = fbm((v_world_xz + e.xy) * micro_normal_scale + TIME * 0.05, 4);
+		float n_z = fbm((v_world_xz + e.yx) * micro_normal_scale + TIME * 0.05, 4);
+		micro_n = vec3(n_c - n_x, 1.0, n_c - n_z);
+		breakup = fbm(v_world_xz * foam_noise_scale + TIME * 0.15, 4);
+	}
 	vec3 shaded_normal = normalize(NORMAL + micro_n * micro_normal_strength * detail_fade * vec3(1.0, 0.0, 1.0));
 
 	float shore_foam = 1.0 - smoothstep(0.0, foam_distance, depth_diff);
 	float crest_foam = smoothstep(foam_crest_threshold, foam_crest_threshold + foam_crest_softness, v_wave_height_norm);
 	float foam_mask = clamp(shore_foam + crest_foam, 0.0, 1.0);
-	float breakup = mix(1.0, fbm(v_world_xz * foam_noise_scale + TIME * 0.15, 4), detail_fade);
-	foam_mask *= mix(0.65, 1.0, breakup);
+	foam_mask *= mix(0.65, 1.0, mix(1.0, breakup, detail_fade));
 
 	vec3 final_color = mix(base_color, foam_color.rgb, clamp(foam_mask, 0.0, 1.0));
 

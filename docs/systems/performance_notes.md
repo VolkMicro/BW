@@ -172,6 +172,80 @@ explicit instruction. Package A's (`engineering.md`) budget and levers for
 that part of the stack stand exactly as written; this doc doesn't
 duplicate them.
 
+## Real-hardware incident: ~1 fps on first actual playtest, and the fixes
+
+Everything above was written honestly as a **design-time-only** assessment
+because no GPU existed anywhere this project had been built or run. The
+first time a real person actually cloned the repo and pressed Play on a
+real GPU (Windows, `world/god_view.tscn`), it ran at approximately **1
+fps** — effectively unplayable. This section records what was actually
+changed in response, by a later pass than the one that wrote the rest of
+this doc, since the honest thing to do with a "not yet measured" caveat
+that turns out badly is to say so plainly once it is measured, not quietly
+leave the design-time text standing uncorrected.
+
+**Diagnosis (reasoned from the exact settings in place, not a real GPU
+profiler trace — still not available in the sandbox this fix was written
+in):** the checked-in stack combined, all simultaneously, at fairly
+aggressive quality: `sdfgi_cascades = 6` at `sdfgi_min_cell_size = 0.2`
+(fine voxel GI over a wide world footprint), `ssil_enabled = true`
+alongside SDFGI (redundant indirect-lighting cost — SDFGI already supplies
+indirect light; SSIL is one of the more expensive screen-space passes and
+was adding cost on top of it, not instead of it), 4x MSAA *and* the
+project's own `scaling_3d/mode = 2` (FSR2) active together (FSR2 already
+does its own temporal reconstruction; combining it with explicit MSAA is
+close to paying for two different anti-aliasing strategies at once),
+`directional_shadow/size = 4096` with `soft_shadow_filter_quality = 3`
+(high-quality PCSS-style soft shadows, expensive), and
+`scaling_3d/scale = 0.9` (rendering at 90% resolution, a small win at
+best). Layered on top of three runtime-built CSG Sanctums, three
+InteriorDressings, and the ocean shader's own per-fragment procedural
+noise (see the ocean-tiling note in `docs/systems/integration.md`), this
+is a legitimately heavy "everything near-max" Forward+ configuration that
+had never been checked against real hardware cost — exactly the risk this
+doc's own "Frame budget" section above could only ever flag, not verify.
+
+**Fixes applied, in the order `docs/systems/engineering.md`'s own
+"practical levers" list already specified** (resolution scale → GI →
+fog → shadows, before ever touching draw distance/crowd counts):
+
+- `project.godot`: `scaling_3d/scale` 0.9 → 0.65; `anti_aliasing/quality/msaa_3d`
+  2 → 0 (drop explicit MSAA — FSR2 upscaling already active);
+  `global_illumination/gi/use_half_resolution` false → true;
+  `environment/ssao/quality` and `environment/ssil/quality` 2 → 1;
+  `environment/volumetric_fog/use_filter` 1 → 0;
+  `lights_and_shadows/*/soft_shadow_filter_quality` 3 → 1;
+  `directional_shadow/size` 4096 → 2048.
+- `environment/world_environment.tres`: `ssil_enabled` true → **false**
+  (redundant with SDFGI, one of the pricier screen-space passes);
+  `sdfgi_cascades` 6 → 4; `sdfgi_min_cell_size` 0.2 → 0.4 (halves voxel
+  density). **This directly contradicts this doc's own earlier claim**
+  ("this package does not touch `sdfgi_enabled`, `sdfgi_cascades`,
+  `sdfgi_min_cell_size`, `ssao_*`, or `ssil_enabled` at all") — that claim
+  was true for the original package Q pass and is left standing above
+  rather than silently edited, but a later pass, responding to a real
+  measured problem rather than `art_direction.md` §4's mood-only-changes
+  instruction, did touch them. If mood/weather visibly stops tracking
+  GI/AO quality as a result, that instruction is the thing to revisit.
+- `world/ocean/ocean.gdshader`: the per-fragment procedural detail
+  (micro-normal + foam breakup, 4 `fbm()` calls of 4 octaves each) was
+  previously computed on *every* fragment regardless of camera distance,
+  with only its *contribution* faded out at range — meaning the compute
+  cost was paid everywhere even where the result was discarded. Changed to
+  an `if (detail_fade > 0.001)` branch so most of a wide god-view's
+  visible ocean surface (past the 150m fade distance) skips the noise
+  evaluation entirely rather than just hiding its output.
+
+**Honestly still true after these fixes:** none of this was re-measured on
+real hardware either — the sandbox this fix was written in still has no
+GPU. These are the standard, well-reasoned levers for exactly this
+symptom (SDFGI+SSIL+high shadows+redundant AA all at once on a
+never-profiled scene), applied in the order this project's own engineering
+doc pre-committed to, not a guess — but if it's still slow after this,
+the next lever per that same doc is draw distance/crowd counts (fewer/
+further-culled villagers, a smaller ocean plane or coarser subdivision),
+and the one after that is asking what GPU it's actually running on.
+
 ## Property names: verified, not assumed
 
 Godot 4.3's `Environment`/`ProceduralSkyMaterial` classes were not taken on
