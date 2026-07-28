@@ -1,0 +1,89 @@
+; Engine configuration file.
+; It's best edited using the editor UI and not directly,
+; since the parameters that go here are not all obvious.
+
+config_version=5
+
+[application]
+
+config/name="TITHE & TERROR"
+config/description="A god-sim / life-sim hybrid over the Ninefold Sea. Unnamed god, one rival, two bickering spirits, and a beast that learns."
+run/main_scene="res://world/god_view.tscn"
+config/features=PackedStringArray("4.3", "Forward Plus")
+boot_splash/bg_color=Color(0.043, 0.047, 0.058, 1)
+config/icon="res://icon.svg"
+
+[autoload]
+
+Naklon="*res://core/naklon.gd"
+GameState="*res://core/game_state.gd"
+Reach="*res://systems/faith/reach.gd"
+Voices="*res://systems/voices/voices.gd"
+Weather="*res://systems/weather/weather.gd"
+MusicDirector="*res://audio/music_director.gd"
+
+[display]
+
+window/size/viewport_width=1920
+window/size/viewport_height=1080
+window/stretch/mode="canvas_items"
+window/vsync/vsync_mode=1
+
+[rendering]
+
+renderer/rendering_method="forward_plus"
+renderer/rendering_method.mobile="mobile"
+environment/defaults/default_environment="res://environment/world_environment.tres"
+anti_aliasing/quality/msaa_3d=2
+anti_aliasing/quality/screen_space_aa=1
+anti_aliasing/quality/use_taa=true
+occlusion_culling/use_occlusion_culling=true
+lights_and_shadows/positional_shadow/soft_shadow_filter_quality=3
+lights_and_shadows/directional_shadow/soft_shadow_filter_quality=3
+lights_and_shadows/directional_shadow/size=4096
+global_illumination/gi/use_half_resolution=false
+environment/ssao/quality=2
+environment/ssil/quality=2
+environment/glow/upscale_mode=1
+environment/volumetric_fog/use_filter=1
+textures/decals/filter=3
+textures/light_projectors/filter=3
+scaling_3d/mode=2
+scaling_3d/scale=0.9
+scaling_3d/fsr_sharpness=0.2
+
+[physics]
+
+3d/physics_engine="DEFAULT"
+
+[input]
+
+hand_grip={
+"deadzone": 0.5,
+"events": [Object(InputEventMouseButton,"resource_local_to_scene":false,"resource_name":"","device":-1,"window_id":0,"alt_pressed":false,"shift_pressed":false,"ctrl_pressed":false,"meta_pressed":false,"button_mask":1,"position":Vector2(0, 0),"global_position":Vector2(0, 0),"factor":1.0,"button_index":1,"canceled":false,"pressed":false,"double_click":false,"script":null)
+]
+}
+hand_sigil_draw={
+"deadzone": 0.5,
+"events": [Object(InputEventMouseButton,"resource_local_to_scene":false,"resource_name":"","device":-1,"window_id":0,"alt_pressed":false,"shift_pressed":false,"ctrl_pressed":false,"meta_pressed":false,"button_mask":2,"position":Vector2(0, 0),"global_position":Vector2(0, 0),"factor":1.0,"button_index":2,"canceled":false,"pressed":false,"double_click":false,"script":null)
+]
+}
+camera_modifier={
+"deadzone": 0.5,
+"events": [Object(InputEventKey,"resource_local_to_scene":false,"resource_name":"","device":-1,"window_id":0,"alt_pressed":false,"shift_pressed":false,"ctrl_pressed":false,"meta_pressed":false,"pressed":false,"keycode":0,"physical_keycode":4194328,"key_label":0,"unicode":0,"location":0,"echo":false,"script":null)
+]
+}
+praise_avatar={
+"deadzone": 0.5,
+"events": [Object(InputEventKey,"resource_local_to_scene":false,"resource_name":"","device":-1,"window_id":0,"alt_pressed":false,"shift_pressed":false,"ctrl_pressed":false,"meta_pressed":false,"pressed":false,"keycode":0,"physical_keycode":70,"key_label":0,"unicode":0,"location":0,"echo":false,"script":null)
+]
+}
+chastise_avatar={
+"deadzone": 0.5,
+"events": [Object(InputEventKey,"resource_local_to_scene":false,"resource_name":"","device":-1,"window_id":0,"alt_pressed":false,"shift_pressed":false,"ctrl_pressed":false,"meta_pressed":false,"pressed":false,"keycode":0,"physical_keycode":71,"key_label":0,"unicode":0,"location":0,"echo":false,"script":null)
+]
+}
+
+[input_devices]
+
+pointing/emulate_touch_from_mouse=false

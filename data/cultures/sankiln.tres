@@ -1,0 +1,17 @@
+[gd_resource type="Resource" script_class="Culture" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://core/culture.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+id = &"sankiln"
+display_name = "Sankiln"
+one_line = "Kiln-folk of the sun-cracked terraces, who read a household's luck in the color its hearth-fire turns."
+material_palette = ["terracotta", "sun-baked brick", "ash-glaze ceramic", "kiln-blackened timber lintels", "undyed linen"]
+architecture_notes = "Compact terraced brick houses stepping down dry hillsides, communal kilns at every terrace break, glaze-fired roof tiles in ash-grey and ember-orange."
+ritual_name = "The Firereading"
+ritual_notes = "Elders bank a hearth with a fistful of the household's grain and read the color the flame turns — pale gold for a good year, blue-white for a warning. It is advice, not worship, though the Sankiln will happily let a listening god take the credit."
+taboo_notes = "Feeding the hearth anything that once breathed, rather than grain or wood, is called Ash-Debt and is the surest way a Sankiln household believes it will go hungry the following year."
+color_primary = Color(0.729, 0.322, 0.157, 1)
+color_accent = Color(0.949, 0.788, 0.529, 1)
+voice_notes = "Clipped, practical, fond of proverbs about heat and patience; raises pitch when arguing, which is often and without malice."

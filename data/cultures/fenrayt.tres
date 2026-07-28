@@ -1,0 +1,17 @@
+[gd_resource type="Resource" script_class="Culture" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://core/culture.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+id = &"fenrayt"
+display_name = "Fenrayt"
+one_line = "Bog-wrights of the black water, who owe every good year to something they sank."
+material_palette = ["peat-black timber", "reed thatch", "bog-oak (bog iron stained)", "waxed wool", "tin fittings"]
+architecture_notes = "Houses raised on stilts over peat pools, walkways of lashed reed, roofs turfed so the marsh reclaims them slowly. Nothing is painted; everything is stained by the water it stands over."
+ritual_name = "The Sinking"
+ritual_notes = "At first thaw the Fenrayt lower a woven raft of their year's best work into the black pools and let it go down uncomplaining. It is a gift, never a punishment, and the raft is never a person, an animal, or anything that was alive and unwilling — that line is what separates the Sinking from the Offering-Debt, the taboo act every Fenrayt elder will name unprompted if a god ever asks for a living gift."
+taboo_notes = "The Offering-Debt (a living, willing-or-not sacrifice) is spoken of only as a crime out of the old bad years before the bog-wrights bound themselves to a kinder patron. No Fenrayt performs it willingly."
+color_primary = Color(0.106, 0.114, 0.098, 1)
+color_accent = Color(0.518, 0.404, 0.204, 1)
+voice_notes = "Low, wet consonants, long vowels, understatement as a virtue — a Fenrayt calls a flood 'a wet week'."

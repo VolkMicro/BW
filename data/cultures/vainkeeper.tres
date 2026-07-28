@@ -1,0 +1,17 @@
+[gd_resource type="Resource" script_class="Culture" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://core/culture.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+id = &"vainkeeper"
+display_name = "Vainkeeper"
+one_line = "Terrace-orchardists who name every tree for an ancestor and talk to the grafts like they're listening."
+material_palette = ["rope-bridge fiber", "terraced fieldstone", "ancestor-tree timber (only deadfall, never a living tree felled)", "woven bark cloth"]
+architecture_notes = "Stepped hillside orchard-terraces linked by rope-and-plank bridges, small shrine-nooks built into the fork of old trees, storehouses raised on single carved posts."
+ritual_name = "The Grafting"
+ritual_notes = "A Vainkeeper splices a cutting from an elder tree onto a young one while naming a person they want remembered. The tree carries the name forward; nothing is asked of it but growth."
+taboo_notes = "Felling a named ancestor-tree for any reason, or grafting in a name still living against their will, is called Root-Debt and is the one crime every Vainkeeper elder can describe in detail without ever having seen it done."
+color_primary = Color(0.310, 0.427, 0.216, 1)
+color_accent = Color(0.643, 0.475, 0.294, 1)
+voice_notes = "Patient, agricultural metaphors for everything including grief and war; addresses trees before people when both are present."

@@ -1,0 +1,17 @@
+[gd_resource type="Resource" script_class="Culture" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://core/culture.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+id = &"raimborn"
+display_name = "Raimborn"
+one_line = "Whalebone shore-folk who read the coming weather off a god's mood before the god has decided it."
+material_palette = ["whalebone framing", "driftwood siding", "blue lake-ice (decorative, seasonal)", "sealskin", "bleached rope"]
+architecture_notes = "Curved whalebone-ribbed longhouses half-dug into dune banks, driftwood plank walkways, ice-cut windbreaks in winter."
+ritual_name = "The Wavecall"
+ritual_notes = "Before any launch, a Raimborn crew hums one held note into the surf and waits for the water to answer with its own rhythm. A flat sea means wait; a broken rhythm means go. It costs nothing and nobody is thrown to it."
+taboo_notes = "Weighting a boat's launch-rope with anything that lived, instead of stone, is called Keel-Debt and is considered the fastest way to guarantee the boat never returns."
+color_primary = Color(0.184, 0.286, 0.365, 1)
+color_accent = Color(0.827, 0.878, 0.898, 1)
+voice_notes = "Speech paced to breathing at sea — long runs then a hard stop; fond of counting things by the boatload."
