@@ -202,6 +202,7 @@ func _refresh_help_label() -> void:
 		return
 	_help_label.text = (
 		"1: god view   2: walk into Fenrayt Hollow's Sanctum (arrows to walk once inside, Enter to interact)\n" +
+		"God view — arrows: pan camera   scroll: zoom   hold middle-click + drag: orbit\n" +
 		"Mouse: aim the Hand   Hold Left Click: grip/throw   Hold Right Click + drag: draw a sigil\n" +
 		"[ / ]: nudge Naklon toward Mercy / Cruelty   F / G: praise / chastise the Avatar   L: force Louhi to re-evaluate now"
 	)

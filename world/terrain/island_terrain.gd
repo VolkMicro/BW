@@ -105,4 +105,11 @@ func sample_height(world_xz: Vector2) -> float:
 	if generator == null:
 		return sea_level
 	var local := to_local(Vector3(world_xz.x, 0.0, world_xz.y))
-	return generator.height_at(local.x, local.z) + global_position.y
+	# sample_smoothed_height(), not height_at(): the render mesh and
+	# collision are built from the smoothed grid (see island_generator.gd's
+	# smoothing_passes), so anything placed via the raw analytic height_at()
+	# could sit slightly above or clipped into the ground it's actually
+	# standing on. Everything that places something ON the terrain (village
+	# anchors, the Avatar/Hand drop height, ReachBorderRing) should agree
+	# with what the player can see and collide with.
+	return generator.sample_smoothed_height(local.x, local.z) + global_position.y

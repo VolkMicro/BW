@@ -156,6 +156,36 @@ plain `Node3D`. This is what makes `frame_duel_arena_focus` safe to call
 whether or not `actors/avatar/combat/` (package L) happens to be instanced
 in the current scene.
 
+### God-view free camera (pan/zoom/orbit)
+
+`frame_god_view(xform, ...)` no longer just plays a one-off transform and
+leaves the camera parked there — it seeds a real orbit-camera state
+(`_derive_orbit_from_xform()`: intersects the given transform's forward ray
+with the sea-level plane to find a ground focus point, then reads off
+distance/yaw/pitch from that) and, once any transition finishes, hands
+control to `_process_god_view_free_camera()` every physics frame:
+
+- **Pan** — the same `ui_up`/`ui_down`/`ui_left`/`ui_right` arrow actions
+  the interior-walk mode already uses (mode-gated, so no conflict), moving
+  the orbit's focus point across the ground plane, relative to current yaw
+  so "up" always means "further into the screen."
+- **Zoom** — mouse wheel, clamped between `god_min_distance`/
+  `god_max_distance`.
+- **Orbit** — hold the **middle** mouse button and drag; yaw/pitch update
+  from mouse motion, pitch clamped (`god_min_pitch_deg`/`god_max_pitch_deg`)
+  so it can't flip to looking level or straight down. Deliberately the
+  middle button, not left/right — `actors/hand/hand.gd` (grab) and
+  `systems/sigils/sigil_caster.gd` (draw a sigil) already own those, and
+  middle-drag was free, so no cross-file input-priority change was needed
+  anywhere else to add this.
+
+This only runs in `MODE_GOD_VIEW`, and is suspended while an eased
+`transition_to()` tween is still in flight (checked via `_tween.is_valid()`)
+so the two don't fight over `camera.global_transform` on the same frame —
+free control picks up the instant the transition finishes, from wherever it
+landed. `frame_sanctum_interior()`/`frame_duel_arena_focus()` are
+unaffected; they still play a fixed framing exactly as before.
+
 ### Interior walking + the clamp
 
 While `mode == MODE_SANCTUM_INTERIOR`, `_physics_process()` reads

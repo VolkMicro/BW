@@ -47,6 +47,15 @@ signal action_refused(reason: StringName, world_pos: Vector3)
 @export var throw_impulse_multiplier: float = 1.0
 @export var throw_spin_factor: float = 0.4
 
+## -- Carry sway: a held object lags/swings behind the hand's own motion
+## instead of rigidly following it, so carrying something reads as carrying
+## real weight rather than gluing a prop to a socket. Purely a visual
+## offset on the held socket (see _update_sway()) — never touches the held
+## body's physics state, so release/throw velocity is unaffected. -------
+@export var sway_amount: float = 0.32 ## meters of lag per m/s of hand speed
+@export var sway_stiffness: float = 46.0
+@export var sway_damping: float = 9.0
+
 ## -- Naklon-reactive palette (mirrors the shader's defaults; exposed here
 ## so a designer can retune from the Inspector without editing the shader) --
 @export var mercy_color: Color = Color(0.82, 0.85, 0.92, 1.0)
@@ -73,6 +82,10 @@ var _out_of_reach_amount: float = 0.0
 var _held: Node3D = null
 var _held_original_parent: Node = null
 var _held_was_rigid: bool = false
+var _held_grab_offset: Transform3D = Transform3D.IDENTITY ## body's transform relative to _held_socket, captured at grab time
+var _held_socket_base_position: Vector3 = Vector3.ZERO
+var _sway_offset: Vector3 = Vector3.ZERO
+var _sway_velocity: Vector3 = Vector3.ZERO
 
 # Each entry: {mcp: Node3D, pip: Node3D, mcp_max_deg: float, pip_max_deg: float}
 var _fingers: Array[Dictionary] = []
@@ -116,6 +129,7 @@ func _physics_process(delta: float) -> void:
 	_apply_finger_curl()
 	_update_material()
 	_update_trail()
+	_update_sway(delta)
 
 
 ## -- Targeting -------------------------------------------------------------
@@ -228,6 +242,14 @@ func _do_grab(body: Node3D) -> void:
 	_held_original_parent = body.get_parent()
 	_held_was_rigid = body is RigidBody3D
 
+	# Preserve exactly where/how the object was grabbed (position AND
+	# rotation, relative to the socket) rather than snapping it to a fixed
+	# identity pose — replaces the earlier documented simplification (see
+	# docs/systems/hand.md's old "Scoped out" note on this). Captured
+	# BEFORE reparenting, while body.global_transform still reflects its
+	# real pre-grab pose.
+	_held_grab_offset = _held_socket.global_transform.affine_inverse() * body.global_transform
+
 	if _held_was_rigid:
 		var rb := body as RigidBody3D
 		rb.freeze = true
@@ -238,10 +260,7 @@ func _do_grab(body: Node3D) -> void:
 	if _held_original_parent != null:
 		_held_original_parent.remove_child(body)
 	_held_socket.add_child(body)
-	# Simplification: the grabbed object snaps to a fixed hand-relative
-	# socket rather than preserving the exact offset/orientation it was
-	# grabbed at. Documented in docs/systems/hand.md under "Scoped out".
-	body.transform = Transform3D.IDENTITY
+	body.transform = _held_grab_offset
 
 	grabbed.emit(body)
 	Voices.react(&"hand_grabbed_object", {"node_name": body.name})
@@ -356,7 +375,8 @@ func _build_hand_model() -> void:
 
 	_held_socket = Node3D.new()
 	_held_socket.name = "HeldSocket"
-	_held_socket.position = Vector3(0, -0.05, 0.06)
+	_held_socket_base_position = Vector3(0, -0.05, 0.06)
+	_held_socket.position = _held_socket_base_position
 	_model.add_child(_held_socket)
 
 	_build_trail()
@@ -458,3 +478,21 @@ func _update_trail() -> void:
 	var unit := Naklon.unit()
 	_trail_process_material.color = mercy_color.lerp(cruelty_color, unit)
 	_trail.emitting = _velocity.length() > 0.15
+
+
+## Held objects lag behind the hand's own spring motion instead of rigidly
+## tracking it — a damped spring pulling _sway_offset toward
+## `-_velocity * sway_amount` (so a fast hand motion drags whatever it's
+## carrying backward/behind it, like real inertia) that relaxes back to
+## zero once nothing is held. Purely visual (offsets _held_socket's local
+## position only) — never touches the held RigidBody3D's own physics state,
+## so _release_held()'s throw velocity is computed from the hand's own
+## _velocity exactly as before, unaffected by this.
+func _update_sway(delta: float) -> void:
+	var target := Vector3.ZERO
+	if _held != null:
+		target = -_velocity * sway_amount
+	var accel := (target - _sway_offset) * sway_stiffness - _sway_velocity * sway_damping
+	_sway_velocity += accel * delta
+	_sway_offset += _sway_velocity * delta
+	_held_socket.position = _held_socket_base_position + _sway_offset

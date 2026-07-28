@@ -116,9 +116,12 @@ from a raw screen-to-world raycast.
   villager controller, can opt in without being a physics body). Chosen
   carry mechanism: **freeze + reparent**, not a `Generic6DOFJoint3D`.
   The body's `freeze = true` (`freeze_mode = FREEZE_MODE_KINEMATIC`), then
-  it's reparented under the Hand's `HeldSocket` node and **snapped** to
-  that socket's local origin (`Transform3D.IDENTITY`) — it does not
-  preserve the exact point/offset it was grabbed at. A frozen `RigidBody3D`
+  it's reparented under the Hand's `HeldSocket` node with its transform set
+  to `_held_socket.global_transform.affine_inverse() * body.global_transform`
+  captured at the moment of grab — it keeps the exact point/offset/rotation
+  it was grabbed at (updated from an earlier pass that snapped to the
+  socket's local origin; see "Scoped out" below, no longer accurate). A
+  frozen `RigidBody3D`
   still has its global transform driven by the scene tree each frame (Godot
   syncs kinematic/frozen bodies' transforms *to* the physics server, not
   the reverse), so it reliably follows the hand's spring motion with zero
@@ -128,9 +131,18 @@ from a raw screen-to-world raycast.
   moving, damped-spring-driven parent body, and was judged not worth the
   tuning budget for this pass — documented here as a deliberate choice,
   not an oversight.
-- **Carry**: automatic — once a body is a child of `HeldSocket` with an
-  identity local transform, it inherits the Hand's `global_transform` for
-  free every frame; no per-frame carry code needed.
+- **Carry**: mostly automatic — once a body is a child of `HeldSocket`, it
+  inherits the Hand's `global_transform` for free every frame; no per-frame
+  carry code needed for the body itself. `HeldSocket`'s own *local* position
+  is not perfectly static, though: `_update_sway()` offsets it by a damped
+  spring pulling toward `-get_hand_velocity() * sway_amount` (`0.32` m of
+  lag per m/s of hand speed by default), relaxing back to zero when nothing
+  is held. A fast hand motion drags whatever it's carrying visibly behind/
+  below the hand rather than gluing it rigidly to the palm — real
+  perceived weight, not a prop stapled to a socket. Purely a visual offset:
+  it never touches the held body's own physics state, so throw velocity
+  below is computed from the Hand's own spring velocity exactly as if this
+  didn't exist.
 - **Throw** (`_release_held`, triggered on `hand_grip` just-released): the
   body is reparented back to whatever parent it came from (falling back to
   `get_tree().current_scene` if that parent no longer exists), its world
@@ -244,10 +256,6 @@ debounce) is a one-line follow-up for whichever package wants it.
 
 ## Scoped out
 
-- **Exact grab-point offset**: grabbed objects snap to a fixed
-  hand-relative socket rather than preserving the precise position/
-  orientation they were grabbed at. A real "pinch where you clicked"
-  feel would need per-contact-point tracking; not implemented this pass.
 - **Held-object collision while carried**: frozen bodies don't push other
   physics objects out of the way while being carried (a `Generic6DOFJoint3D`
   approach would allow this at the cost of stability — see above).

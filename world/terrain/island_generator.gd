@@ -99,18 +99,32 @@ func height_at(local_x: float, local_z: float) -> float:
 	# Ridge weight kept low relative to continent: FRACTAL_RIDGED has sharp
 	# creases (a derivative discontinuity right at each ridge line) that a
 	# heightfield mesh can only approximate with a real, short, steep V at
-	# the sample resolution, regardless of noise frequency. At the previous
+	# the sample resolution, regardless of noise frequency. At the original
 	# 0.35 weight against a 42m max_height those local slopes went steep
 	# enough to backface-cull from a normal outdoor camera angle (see
 	# terrain_triplanar.gdshader's cull_disabled note) and read as
-	# shredded holes rather than mountain relief. 0.2 keeps visible ridged
-	# character without the slope crossing that line.
-	var shaped := continent * 0.8 + ridge * 0.2 + detail * 0.04
+	# shredded holes rather than mountain relief. Lowered further to 0.1
+	# (from an intermediate 0.2) per a "smoother, rolling-hills island"
+	# request — combined with the post-sample smoothing pass in
+	# _sample_grid(), this reads as gentle terrain with only soft
+	# undulation, not a mountain range, while the continent layer alone
+	# still keeps every island shape distinct per-seed.
+	var shaped := continent * 0.86 + ridge * 0.1 + detail * 0.04
 	var h := shaped * max_height * mask
 	# Outside the island mask, sink toward a plausible sea floor instead of a
 	# hard cliff at the heightmap's border.
 	h -= (1.0 - mask) * max_height * 0.35
 	return h + sea_level
+
+## Smoothing passes applied to the sampled heightmap (not to height_at()
+## itself) — a cheap, uniform 3x3 box blur run `smoothing_passes` times.
+## Rounds off the short, sharp per-cell creases FRACTAL_RIDGED still leaves
+## even at a low blend weight, without touching height_at()'s per-point
+## contract (village placement, footstep raycasts, etc. all still sample
+## the *unsmoothed* analytic function — only the render mesh / collision
+## grid, which is what a player actually walks on and looks at, gets the
+## smoothed version, via this cache). 0 disables smoothing entirely.
+@export var smoothing_passes: int = 2
 
 func _sample_grid(res: int) -> PackedFloat32Array:
 	if _cached_resolution == res and _cached_heights.size() == res * res:
@@ -124,9 +138,29 @@ func _sample_grid(res: int) -> PackedFloat32Array:
 		for xi in res:
 			var wx := -half + xi * step
 			heights[zi * res + xi] = height_at(wx, wz)
+	for i in smoothing_passes:
+		heights = _box_blur(heights, res)
 	_cached_heights = heights
 	_cached_resolution = res
 	return heights
+
+## One pass of a 3x3 box blur (self + 4-neighbor average, edge samples
+## clamped rather than wrapped) — cheap (single pass over the grid, no
+## noise re-evaluation) and run once per (re)generation, not per frame.
+func _box_blur(heights: PackedFloat32Array, res: int) -> PackedFloat32Array:
+	var out := PackedFloat32Array()
+	out.resize(res * res)
+	for zi in res:
+		var z0 := maxi(zi - 1, 0)
+		var z1 := mini(zi + 1, res - 1)
+		for xi in res:
+			var x0 := maxi(xi - 1, 0)
+			var x1 := mini(xi + 1, res - 1)
+			var sum := heights[zi * res + xi] * 4.0 \
+				+ heights[zi * res + x0] + heights[zi * res + x1] \
+				+ heights[z0 * res + xi] + heights[z1 * res + xi]
+			out[zi * res + xi] = sum / 8.0
+	return out
 
 func _normal_from_heights(heights: PackedFloat32Array, xi: int, zi: int, res: int, step: float) -> Vector3:
 	var hl := heights[zi * res + maxi(xi - 1, 0)]
@@ -218,3 +252,32 @@ func build_heightmap_shape() -> HeightMapShape3D:
 ## IslandTerrain applies to the collision shape's transform.
 func grid_step() -> float:
 	return size_meters / float(maxi(resolution, 2) - 1)
+
+## Bilinearly-interpolated height from the smoothed render/collision grid
+## (see _sample_grid()/_box_blur()) at an arbitrary point in local XZ space.
+## This is what village placement, the Avatar/Hand drop height, and
+## ReachBorderRing should call instead of height_at() — height_at() is the
+## raw analytic value *before* smoothing, so it can disagree with the mesh
+## a player actually walks on by up to a couple of smoothing passes' worth
+## of local relief. Falls back to height_at() if the grid hasn't been
+## sampled yet (e.g. called before the first build_mesh()/
+## build_heightmap_shape()).
+func sample_smoothed_height(local_x: float, local_z: float) -> float:
+	if _cached_heights.is_empty():
+		return height_at(local_x, local_z)
+	var res := _cached_resolution
+	var half := size_meters * 0.5
+	var step := size_meters / float(res - 1)
+	var fx := clampf((local_x + half) / step, 0.0, float(res - 1))
+	var fz := clampf((local_z + half) / step, 0.0, float(res - 1))
+	var x0 := int(floor(fx))
+	var z0 := int(floor(fz))
+	var x1 := mini(x0 + 1, res - 1)
+	var z1 := mini(z0 + 1, res - 1)
+	var tx := fx - float(x0)
+	var tz := fz - float(z0)
+	var h00 := _cached_heights[z0 * res + x0]
+	var h10 := _cached_heights[z0 * res + x1]
+	var h01 := _cached_heights[z1 * res + x0]
+	var h11 := _cached_heights[z1 * res + x1]
+	return lerp(lerp(h00, h10, tx), lerp(h01, h11, tx), tz)
