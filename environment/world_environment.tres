@@ -42,10 +42,10 @@ ambient_light_color = Color(0.62, 0.66, 0.70, 1)
 ; any more — sky-driven ambient is now the only fill light, so it needs to
 ; carry more of that load or the world reads flat/dark. Tune down if a
 ; real low-end run shows it blowing out highlights instead.
-ambient_light_energy = 0.06
+ambient_light_energy = 0.25
 reflected_light_source = 2
 tonemap_mode = 3
-tonemap_exposure = 1.0
+tonemap_exposure = 0.32
 tonemap_white = 6.0
 ; Glow is a mip-chain of downsample+blur+upsample passes over the whole 3D
 ; buffer, every frame. It is genuinely cheap on a discrete GPU and genuinely

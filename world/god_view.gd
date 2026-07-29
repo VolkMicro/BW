@@ -225,6 +225,7 @@ var _nudged_rite: bool = false
 
 
 func _ready() -> void:
+	# _build_far_sea() is deliberately NOT called — see its own comment.
 	_place_villages_and_villagers()
 	_place_avatar_and_hand()
 	_wire_campaign_and_louhi()
@@ -238,6 +239,56 @@ func _ready() -> void:
 	# Voices lines nobody should have to read before touching the mouse.
 	# Opening the log here drops exactly those and nothing else.
 	_voice_log.unmute()
+
+
+## The Gerstner ocean ($OceanSurface) is a finite plane — it has to be, since
+## every vertex carries a baked sea-floor depth for the cheap shoreline (see
+## world/ocean/ocean_surface.gd) and its subdivision has to stay fine enough
+## near the coast for the waves to read. At god-view height its far edge was
+## plainly visible as a straight cut with sky behind it: "you can see the
+## edge of the world".
+##
+## NOT CALLED — kept only as a record of an approach that looked right and
+## measurably was not. The standard two-plane trick (detailed wave plane over
+## one enormous flat quad) put large dark angular patches all over the island
+## the moment it was added: a 9 km, two-triangle quad reaches far past the
+## camera's 4 km far plane, and the depth its huge clipped triangles resolve
+## to is not reliable enough to lose the depth test against terrain hundreds
+## of metres closer. Verified by bisection — the patches appeared in the
+## render that introduced this and vanished in the render that removed it,
+## with sun shadows disabled in both, which had already ruled out shadow acne.
+##
+## The horizon is instead fixed by simply enlarging the real wave plane
+## (2400 m at 112 subdivisions ~= 21 m quads) so its edge sits deep inside the
+## fog. Coarser distant waves are a cheap price; the fog hides them, and the
+## near-shore quads are still fine enough to read.
+##
+## Left in the file rather than deleted because "just add a big flat plane
+## under it" is the obvious next idea anyone will have here, and it is worth
+## knowing it was tried, why it failed, and how that was established.
+const FAR_SEA_EXTENT := 9000.0
+const FAR_SEA_DEPTH_OFFSET := -0.6
+
+func _build_far_sea() -> void:
+	var mesh := PlaneMesh.new()
+	mesh.size = Vector2(FAR_SEA_EXTENT, FAR_SEA_EXTENT)
+	mesh.subdivide_width = 0
+	mesh.subdivide_depth = 0
+
+	var mat := StandardMaterial3D.new()
+	# Matches world/ocean/ocean.gdshader's own color_deep default so the two
+	# planes read as one body of water where they meet.
+	mat.albedo_color = Color(0.016, 0.078, 0.153)
+	mat.roughness = 0.75
+	mat.metallic = 0.0
+
+	var far_sea := MeshInstance3D.new()
+	far_sea.name = "FarSea"
+	far_sea.mesh = mesh
+	far_sea.material_override = mat
+	far_sea.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	add_child(far_sea)
+	far_sea.global_position = Vector3(0.0, FAR_SEA_DEPTH_OFFSET, 0.0)
 
 
 # ---------------------------------------------------------------------------

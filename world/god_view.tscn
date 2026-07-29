@@ -29,7 +29,7 @@ environment = ExtResource("1")
 
 [node name="Sun" type="DirectionalLight3D" parent="."]
 transform = Transform3D(-0.699118, 0, 0.715007, 0.556455, 0.627953, 0.544089, -0.448991, 0.778251, -0.439013, 0, 40, 0)
-light_energy = 0.22
+light_energy = 1.0
 light_angular_distance = 0.6
 shadow_enabled = true
 directional_shadow_mode = 0
@@ -44,13 +44,13 @@ script = ExtResource("3")
 island_seed = 1
 size_meters = 320.0
 resolution = 161
-max_height = 42.0
+max_height = 58.0
 sea_level = 0.0
 
 [node name="OceanSurface" type="MeshInstance3D" parent="."]
 script = ExtResource("4")
-size = Vector2(800, 800)
-subdivisions = 64
+size = Vector2(2400, 2400)
+subdivisions = 112
 
 [node name="Villages" type="Node3D" parent="."]
 
