@@ -111,6 +111,23 @@ func _ready() -> void:
 		Weather.weather_changed.connect(_on_weather_changed)
 
 
+## Re-apply on a slow timer as well as on weather_changed.
+##
+## The daylight factor below moves continuously, and weather_changed only
+## fires every 1.5 s on the procedural path and every FIFTEEN MINUTES on the
+## real-weather feed. Driving the sky off the signal alone would leave it
+## frozen at dawn brightness for a quarter of an hour.
+const DAY_REAPPLY_INTERVAL := 1.0
+var _reapply_accum: float = 0.0
+
+func _process(delta: float) -> void:
+	_reapply_accum += delta
+	if _reapply_accum < DAY_REAPPLY_INTERVAL:
+		return
+	_reapply_accum = 0.0
+	_apply(Weather.current, true)
+
+
 func _exit_tree() -> void:
 	if Weather.weather_changed.is_connected(_on_weather_changed):
 		Weather.weather_changed.disconnect(_on_weather_changed)
@@ -151,10 +168,30 @@ func _apply(state: Dictionary, animate: bool) -> void:
 	var target_vfog_density := base_vfog * _last_fog_multiplier
 	# Each is the AUTHORED baseline scaled by gloom, not a hard absolute —
 	# see the _base_* declarations above for why that distinction matters.
+	# DAYLIGHT, layered under the gloom. 1 in full day, 0 at night.
+	#
+	# environment/day_cycle_driver.gd already swings the sun, but the sky and
+	# the ambient term are the Environment's, not the light's, so without this
+	# night was a dim island under a bright blue midday sky.
+	#
+	# It lives here rather than in the day cycle driver because these four
+	# properties have exactly one owner (see the _base_* declarations above),
+	# and two nodes writing the same Environment field would fight — the
+	# already-fixed exposure bug in this file's history was that same mistake
+	# in a smaller form.
+	#
+	# tonemap_exposure is deliberately NOT dimmed by night. The moonlight key
+	# is already weak; crushing exposure on top of it takes the island from
+	# "night" to "cannot see the island", which for a game played from 300 m
+	# up is the whole screen.
+	var daylight := smoothstep(-0.15, 0.35, sin(Weather.day_phase() * TAU))
+	var night_ambient := lerpf(0.22, 1.0, daylight)
+	var night_sky := lerpf(0.10, 1.0, daylight)
+
 	var target_exposure := _base_tonemap_exposure * lerpf(1.0, 0.5, _last_gloom)
-	var target_ambient := _base_ambient_energy * lerpf(1.0, 0.45, _last_gloom)
-	var target_bg_energy := _base_bg_energy * lerpf(1.0, 0.5, _last_gloom)
-	var target_fog_light_energy := _base_fog_light_energy * lerpf(1.0, 0.4, _last_gloom)
+	var target_ambient := _base_ambient_energy * lerpf(1.0, 0.45, _last_gloom) * night_ambient
+	var target_bg_energy := _base_bg_energy * lerpf(1.0, 0.5, _last_gloom) * night_sky
+	var target_fog_light_energy := _base_fog_light_energy * lerpf(1.0, 0.4, _last_gloom) * night_sky
 
 	if animate and ease_seconds > 0.0:
 		if _tween and _tween.is_valid():

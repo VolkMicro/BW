@@ -66,10 +66,12 @@ Done since the roadmap was written:
   half of every cycle spent staring at an unreadable shape is not atmosphere.
   Villages read as points of light at night, which came free from the
   Sanctum altar emission.
-  STILL TO DO: the sky does not darken with it, so at night a dim island sits
-  under a bright blue sky. `environment/weather_environment_driver.gd` owns
-  the environment baselines — layer the day factor there rather than fighting
-  it from the day cycle driver.
+  The sky darkens with it too: the daylight factor is layered into
+  `environment/weather_environment_driver.gd`, which is the single owner of
+  the Environment's ambient/background/fog energies. It went there rather
+  than into the day cycle driver precisely so two nodes never write the same
+  Environment field. Exposure is deliberately left alone — crushing it on top
+  of weak moonlight takes the island from "night" to "cannot see the island".
 - `scripts_ci/screenshot.gd` grew `SHOT_DAY_PHASE` (0 = sunrise, 0.25 = noon,
   0.75 = midnight). Without it a shot can only ever show the minute the
   harness happened to boot in.
