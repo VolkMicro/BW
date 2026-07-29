@@ -79,7 +79,25 @@ ssil_enabled = false
 ssr_enabled = false
 sdfgi_enabled = false
 volumetric_fog_enabled = false
+; Fog is DEPTH-mode, not exponential, and it starts well beyond the island.
+; Exponential fog begins at the camera, so at god-view range it laid a
+; blue-grey sheet over the play space itself — measured: it was pulling the
+; island from green (G-B = +1) to blue-dominant (G-B = -3) and washing out
+; ~46% of its colour. That is the opposite of what atmosphere is for. The
+; horizon still needs hiding (the ocean plane ends at 1200 m), so fog now
+; begins at 420 m — past the island, before the ocean's edge — and reaches
+; full strength at the horizon.
+;
+; NOTE: environment/graphics_preset.gd forces fog_enabled = true at runtime,
+; so setting it false here does nothing. Two separate debugging sessions were
+; lost to that; the knobs that actually work are these depth bounds and
+; naklon_environment_driver.gd's MERCY/CRUELTY_FOG_DENSITY constants.
 fog_enabled = true
+fog_mode = 1
+fog_depth_begin = 420.0
+fog_depth_end = 2100.0
+fog_depth_curve = 1.4
+fog_sky_affect = 0.35
 fog_light_color = Color(0.639, 0.702, 0.784, 1)
 fog_density = 0.0008
 adjustment_enabled = true

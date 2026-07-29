@@ -165,3 +165,74 @@ week was lost to skipping that step.
 - [Realism vs Stylization in Game Art — Sunstrike Studios](https://sunstrikestudios.com/en/blog/game_art_visual_direction/)
 - [Stylized art style — Pixune](https://pixune.com/blog/stylized-art-style/)
 - [Understanding game art styles — Argentics](https://www.argentics.io/understanding-game-art-styles)
+
+---
+
+# Applied: hydraulic erosion (this pass)
+
+Item 1 of the priority list is implemented in `world/terrain/island_generator.gd`.
+
+**Measured:** `build_mesh()` with 22,000 droplets takes **818 ms** on this
+machine — a one-time generation cost, zero frame cost, exactly as predicted.
+Height range is preserved (max 32.7 m, min -20.3 m) and only **17 vertices
+out of 25,921** end up steeper than `n.y < 0.55`, so erosion does *not*
+reintroduce the near-vertical slopes that caused the old hole problem. The
+flow map normalises correctly (peak 1.0 after normalisation, 244 of the
+sampled cells carrying meaningful flow).
+
+**Visible result:** branching valleys now run down the island and the
+clustered forest follows them, because the scatter rules key off slope and
+the valleys are the steep parts. That is the "it looks like water ran here"
+effect the blur could never produce.
+
+The sea drain works as the sources warned it must: droplets terminate on
+reaching `sea_level` instead of pooling at the coast.
+
+`flow_at(local_x, local_z) -> float` exposes the normalised flow map. It is
+not consumed by anything yet — it is the intended input for river placement
+(item 2) and moisture-driven vegetation (item 4).
+
+## Also applied: fog moved to the horizon (item 3, partially)
+
+Fog was exponential, which begins at the camera, so at god-view range it lay
+a blue-grey sheet over the play space itself. Measured: it pulled the island
+from green-dominant (G−B = +1) to blue-dominant (G−B = −3). Now DEPTH-mode
+fog beginning at 420 m — past the island, before the ocean's 1200 m edge —
+so the horizon is still hidden and the island is not washed.
+
+**Trap worth knowing:** `environment/graphics_preset.gd` sets
+`env.fog_enabled = true` at runtime, so setting `fog_enabled = false` in the
+`.tres` does nothing. Two separate debugging sessions were lost to that. The
+knobs that actually work are the depth bounds and
+`naklon_environment_driver.gd`'s `MERCY/CRUELTY_FOG_DENSITY` constants.
+
+## Still unsolved: the terrain surface renders pale, not green
+
+Recorded properly so the next attempt starts from facts. What is now
+established by measurement, each by its own render:
+
+- The blend masks are correct — grass = 1.00, rock = 0.00, beach = 0.00,
+  computed against the real mesh at four inland points.
+- The textures load and are green (grass average 0.36 / 0.40 / 0.18).
+- The material's `naklon_unit` is 0, so the mercy tint is in effect.
+- **Forcing `ALBEDO = vec3(0, 1, 0)` in the terrain shader changes the
+  rendered result by ~1/255.** This is the strongest clue and it means the
+  surface on screen is not this shader's output.
+- It is not the grass scatter (`grass_count = 0` changes nothing), not the
+  ocean, not fog, not specular or roughness, not sky reflections, not
+  shadows, not the tonemapper.
+- With the terrain mesh hidden the pale surface remains; with the ocean
+  hidden a pale *dome* remains. The dome shape is correct, so the geometry
+  was never the problem — only its colour.
+
+**Method note for whoever picks this up:** `world/ocean/ocean.gdshader` uses
+`render_mode world_vertex_coords`, which means the node's transform is
+ignored — moving the `OceanSurface` node does nothing at all. A test that
+moves it and concludes "the ocean is not involved" is invalid. Verify a
+surface responds to a change before drawing conclusions from it not
+responding.
+
+The next thing to try is the simplest one not yet done: put a garish flat
+material on the terrain via `island_material.tres` (not via the shader) and
+confirm whether *that* reaches the screen. If it does not, the material
+override in `IslandTerrain.regenerate()` is the suspect, not the shader.

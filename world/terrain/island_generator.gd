@@ -116,15 +116,82 @@ func height_at(local_x: float, local_z: float) -> float:
 	h -= (1.0 - mask) * max_height * 0.35
 	return h + sea_level
 
-## Smoothing passes applied to the sampled heightmap (not to height_at()
-## itself) — a cheap, uniform 3x3 box blur run `smoothing_passes` times.
-## Rounds off the short, sharp per-cell creases FRACTAL_RIDGED still leaves
-## even at a low blend weight, without touching height_at()'s per-point
-## contract (village placement, footstep raycasts, etc. all still sample
-## the *unsmoothed* analytic function — only the render mesh / collision
-## grid, which is what a player actually walks on and looks at, gets the
-## smoothed version, via this cache). 0 disables smoothing entirely.
-@export var smoothing_passes: int = 2
+## A light box blur run BEFORE erosion, only to take the sharpest per-cell
+## creases off the raw ridged noise so droplets do not spend their whole life
+## trapped in one-cell pits. Erosion does the real shaping now, so this is 1
+## pass rather than the 2 it used to be. 0 disables it.
+##
+## Note it applies to the sampled grid, not to height_at() — that function
+## stays the raw analytic value. Anything that needs to agree with the
+## surface a player actually sees and collides with must call
+## sample_smoothed_height() instead, which reads this same eroded grid.
+@export var smoothing_passes: int = 1
+
+# ---------------------------------------------------------------------------
+# HYDRAULIC EROSION
+#
+# Blurring is not erosion. A blur removes detail evenly everywhere, which is
+# precisely why this island used to read as a smooth mesa: it had no valleys,
+# because nothing had ever run down it. Real terrain looks the way it does
+# because water carved it, and the cheapest honest way to get that is to
+# simulate the water.
+#
+# Standard particle model. Each droplet spawns somewhere on the island, then
+# repeatedly: reads the height gradient under itself, steers downhill (with
+# some inertia so it does not snap to the steepest neighbour and produce
+# staircase artefacts), moves one cell, and compares how much sediment it is
+# carrying against how much it *could* carry at its current speed and slope.
+# Under capacity, it scoops terrain up; over capacity — or moving uphill — it
+# drops sediment, which is what fills basins and builds the gentle deltas
+# where a valley meets flat ground.
+#
+# Two details make the difference between this working and not:
+#
+#  * THE SEA DRAIN. A droplet that reaches sea level is done — it has run
+#    into the ocean. Without that, droplets pool at the coast and the
+#    shoreline gets a ring of deposited silt instead of river mouths. This is
+#    the failure mode Nick McDonald's hydrology write-up calls out (pools
+#    treating the map boundary as a wall); an island makes the fix trivial,
+#    since the boundary genuinely is a drain.
+#
+#  * ERODING THROUGH A BRUSH, not a single cell. Removing height from one
+#    cell per step carves single-pixel spikes that look like noise and break
+#    the normals. Each erosion event is spread over a small radius, weighted
+#    by distance, so what appears is a channel rather than a needle.
+#
+# Cost is paid ONCE, at generation, on a 161x161 grid — it cannot touch frame
+# rate at all, which matters because this project's target hardware is a
+# laptop with integrated graphics (docs/systems/performance_lowspec.md).
+# ---------------------------------------------------------------------------
+
+## 0 disables erosion entirely and falls back to blur-only terrain.
+@export var erosion_droplets: int = 22000
+## Max steps a single droplet may take before it is abandoned.
+@export var erosion_droplet_lifetime: int = 26
+## How strongly a droplet keeps its heading vs. following the gradient.
+## 0 = always straight down the steepest slope (staircase artefacts),
+## 1 = never turns. Low values look like water, high values look like noise.
+@export_range(0.0, 1.0) var erosion_inertia: float = 0.06
+## Multiplier on how much sediment a droplet can carry for a given
+## speed/slope/volume. Higher = deeper valleys.
+@export var erosion_capacity: float = 5.5
+## Floor on capacity so a droplet on dead-flat ground still does something
+## rather than dumping its whole load in one cell.
+@export var erosion_min_capacity: float = 0.02
+@export_range(0.0, 1.0) var erosion_erode_rate: float = 0.35
+@export_range(0.0, 1.0) var erosion_deposit_rate: float = 0.28
+@export_range(0.0, 1.0) var erosion_evaporation: float = 0.025
+@export var erosion_gravity: float = 10.0
+## Radius, in cells, that a single erosion event is spread over.
+@export var erosion_brush_radius: int = 2
+
+## Per-cell record of how much water crossed it, normalised 0..1 after the
+## run. This is the flow map, and it is the genuinely valuable by-product:
+## it is the correct input for placing rivers (high flow), for deciding where
+## vegetation should be lush (damp valleys) vs. where bare rock shows
+## (scoured ridges), rather than guessing from slope and height alone.
+## Empty until a grid has been built. See flow_at().
+var _flow: PackedFloat32Array = PackedFloat32Array()
 
 func _sample_grid(res: int) -> PackedFloat32Array:
 	if _cached_resolution == res and _cached_heights.size() == res * res:
@@ -140,9 +207,164 @@ func _sample_grid(res: int) -> PackedFloat32Array:
 			heights[zi * res + xi] = height_at(wx, wz)
 	for i in smoothing_passes:
 		heights = _box_blur(heights, res)
+	if erosion_droplets > 0:
+		_erode(heights, res)
 	_cached_heights = heights
 	_cached_resolution = res
 	return heights
+
+## Normalised 0..1 water flow through the cell nearest this local XZ point.
+## 0 until a grid has been built. Bilinear would be overkill — consumers of
+## this (river placement, vegetation moisture) want a broad signal, not a
+## precise one.
+func flow_at(local_x: float, local_z: float) -> float:
+	if _flow.is_empty() or _cached_resolution <= 0:
+		return 0.0
+	var res := _cached_resolution
+	var half := size_meters * 0.5
+	var step := size_meters / float(res - 1)
+	var xi := clampi(int(round((local_x + half) / step)), 0, res - 1)
+	var zi := clampi(int(round((local_z + half) / step)), 0, res - 1)
+	return _flow[zi * res + xi]
+
+func _erode(heights: PackedFloat32Array, res: int) -> void:
+	var rng := RandomNumberGenerator.new()
+	# Seeded off the island's own seed, so the same island always erodes into
+	# the same valleys — the whole generator is meant to be reproducible from
+	# island_seed alone.
+	rng.seed = hash(island_seed) ^ 0x5EED
+	var step := size_meters / float(res - 1)
+	var half := size_meters * 0.5
+
+	_flow = PackedFloat32Array()
+	_flow.resize(res * res)
+
+	# Precompute the erosion brush: offsets within the radius and their
+	# distance weights, normalised to sum to 1 so an erosion event removes
+	# exactly the amount asked for regardless of radius.
+	var brush_dx := PackedInt32Array()
+	var brush_dz := PackedInt32Array()
+	var brush_w := PackedFloat32Array()
+	var wsum := 0.0
+	for bz in range(-erosion_brush_radius, erosion_brush_radius + 1):
+		for bx in range(-erosion_brush_radius, erosion_brush_radius + 1):
+			var d := sqrt(float(bx * bx + bz * bz))
+			if d > float(erosion_brush_radius):
+				continue
+			var w := 1.0 - d / float(erosion_brush_radius + 1)
+			brush_dx.append(bx)
+			brush_dz.append(bz)
+			brush_w.append(w)
+			wsum += w
+	for i in brush_w.size():
+		brush_w[i] = brush_w[i] / wsum
+
+	var max_index := res - 1
+	var flow_peak := 0.0
+
+	for _d in erosion_droplets:
+		# Spawn anywhere on the grid. Droplets starting below sea level die
+		# immediately in the loop's first check, which is correct and cheap.
+		var px := rng.randf() * float(max_index)
+		var pz := rng.randf() * float(max_index)
+		var dx := 0.0
+		var dz := 0.0
+		var speed := 1.0
+		var water := 1.0
+		var sediment := 0.0
+
+		for _life in erosion_droplet_lifetime:
+			var cx := int(px)
+			var cz := int(pz)
+			if cx < 0 or cz < 0 or cx >= max_index or cz >= max_index:
+				break
+			var fx := px - float(cx)
+			var fz := pz - float(cz)
+			var i00 := cz * res + cx
+			var i10 := i00 + 1
+			var i01 := i00 + res
+			var i11 := i01 + 1
+			var h00 := heights[i00]
+			var h10 := heights[i10]
+			var h01 := heights[i01]
+			var h11 := heights[i11]
+
+			# Height and gradient under the droplet, bilinear.
+			var height_here := h00 * (1.0 - fx) * (1.0 - fz) + h10 * fx * (1.0 - fz) \
+				+ h01 * (1.0 - fx) * fz + h11 * fx * fz
+
+			# THE SEA DRAIN: the droplet has reached the ocean, it is done.
+			if height_here <= sea_level:
+				break
+
+			_flow[i00] += water
+			if _flow[i00] > flow_peak:
+				flow_peak = _flow[i00]
+
+			var grad_x := (h10 - h00) * (1.0 - fz) + (h11 - h01) * fz
+			var grad_z := (h01 - h00) * (1.0 - fx) + (h11 - h10) * fx
+
+			dx = dx * erosion_inertia - grad_x * (1.0 - erosion_inertia)
+			dz = dz * erosion_inertia - grad_z * (1.0 - erosion_inertia)
+			var dlen := sqrt(dx * dx + dz * dz)
+			if dlen < 0.0001:
+				break # sitting in a pit with nowhere to go
+			dx /= dlen
+			dz /= dlen
+
+			px += dx
+			pz += dz
+			var ncx := int(px)
+			var ncz := int(pz)
+			if ncx < 0 or ncz < 0 or ncx >= max_index or ncz >= max_index:
+				break
+
+			var nfx := px - float(ncx)
+			var nfz := pz - float(ncz)
+			var n00 := ncz * res + ncx
+			var new_height := heights[n00] * (1.0 - nfx) * (1.0 - nfz) \
+				+ heights[n00 + 1] * nfx * (1.0 - nfz) \
+				+ heights[n00 + res] * (1.0 - nfx) * nfz \
+				+ heights[n00 + res + 1] * nfx * nfz
+			var delta := new_height - height_here
+
+			var capacity := maxf(-delta * speed * water * erosion_capacity, erosion_min_capacity)
+
+			if sediment > capacity or delta > 0.0:
+				# Over capacity, or running uphill: drop material. When
+				# running uphill, never drop more than fills the step — that
+				# is what turns a pit into flat ground rather than a bump.
+				var drop := (sediment - capacity) * erosion_deposit_rate if delta <= 0.0 \
+					else minf(delta, sediment)
+				sediment -= drop
+				# Deposit bilinearly on the four cells we just left, so the
+				# fill follows the surface instead of stacking on one vertex.
+				heights[i00] += drop * (1.0 - fx) * (1.0 - fz)
+				heights[i10] += drop * fx * (1.0 - fz)
+				heights[i01] += drop * (1.0 - fx) * fz
+				heights[i11] += drop * fx * fz
+			else:
+				# Under capacity on a downhill step: cut. Never cut deeper
+				# than the step itself, or the droplet digs a shaft.
+				var cut := minf((capacity - sediment) * erosion_erode_rate, -delta)
+				sediment += cut
+				for bi in brush_w.size():
+					var bx := cx + brush_dx[bi]
+					var bz := cz + brush_dz[bi]
+					if bx < 0 or bz < 0 or bx > max_index or bz > max_index:
+						continue
+					heights[bz * res + bx] -= cut * brush_w[bi]
+
+			speed = sqrt(maxf(speed * speed + delta * erosion_gravity, 0.0))
+			water *= (1.0 - erosion_evaporation)
+			if water < 0.01:
+				break
+
+	# Normalise the flow map so consumers get a stable 0..1 regardless of
+	# droplet count.
+	if flow_peak > 0.0:
+		for i in _flow.size():
+			_flow[i] = _flow[i] / flow_peak
 
 ## One pass of a 3x3 box blur (self + 4-neighbor average, edge samples
 ## clamped rather than wrapped) — cheap (single pass over the grid, no
