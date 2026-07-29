@@ -32,6 +32,41 @@ func _ready() -> void:
 	for i in range(frames):
 		await get_tree().process_frame
 
+	# SHOT_DUMP_VILLAGES: print every registered village with its final,
+	# terrain-resolved position. The layout is planned at runtime now
+	# (world/village/settlement_planner.gd), so this is the only way to find
+	# out where the villages actually ended up.
+	if OS.get_environment("SHOT_DUMP_VILLAGES") != "":
+		for v_id in GameState.villages:
+			var v: Village = GameState.villages[v_id]
+			print("VILLAGE %s | %s | %s | pop %d | faith %.2f"
+				% [v.id, v.display_name, v.position_on_island, v.population, v.faith_fraction])
+
+	# SHOT_CAM="x,y,z,tx,ty,tz": park the active camera at x/y/z looking at
+	# tx/ty/tz. Without it a shot is stuck with whatever the scene authored,
+	# which is useless for checking one particular village out of fifteen.
+	var cam_spec := OS.get_environment("SHOT_CAM")
+	if not cam_spec.is_empty():
+		var n: PackedStringArray = cam_spec.split(",")
+		var cam := get_viewport().get_camera_3d()
+		if cam != null and n.size() >= 6:
+			# The camera rig writes the camera's transform every frame, so
+			# parking the camera is not enough — the rig has to stop driving it
+			# first, or the next frame puts it straight back.
+			var up: Node = cam
+			for i in range(4):
+				if up == null:
+					break
+				up.set_process(false)
+				up.set_physics_process(false)
+				up = up.get_parent()
+			cam.set_as_top_level(true)
+			cam.global_position = Vector3(float(n[0]), float(n[1]), float(n[2]))
+			cam.look_at(Vector3(float(n[3]), float(n[4]), float(n[5])), Vector3.UP)
+			# Let the moved camera actually render before the capture.
+			for i in range(3):
+				await get_tree().process_frame
+
 	var img := get_viewport().get_texture().get_image()
 	var err := img.save_png(out_path)
 	if err != OK:

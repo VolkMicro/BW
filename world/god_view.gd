@@ -46,8 +46,15 @@ extends Node3D
 const VILLAGER_SCENE: PackedScene = preload("res://actors/villagers/villager.tscn")
 const CALLING_STONE_SCENE: PackedScene = preload("res://actors/villagers/calling_stone.tscn")
 const OTSO_SPECIES: AvatarSpecies = preload("res://actors/avatar/species/otso.tres")
+const SANCTUM_SCENE: PackedScene = preload("res://world/sanctum/sanctum.tscn")
+const REACH_BORDER_SCRIPT: Script = preload("res://world/terrain/reach_border.gd")
 
 const VILLAGERS_PER_VILLAGE := 5
+
+## How many villages the island carries in total, the three authored ones
+## included. The rest are planned onto the real terrain by SettlementPlanner —
+## see world/village/settlement_planner.gd for why they are not authored.
+const TOTAL_VILLAGES := 15
 
 ## One entry per village: which culture, where its container anchor lives in
 ## the scene tree (X/Z authored on that Node3D in world/god_view.tscn; Y is
@@ -178,7 +185,7 @@ const SLOW_TICK_SEC := 1.0
 ## told what they are, what the verb is, and what winning means, by the two
 ## characters who are going to be talking anyway.
 const OPENING_EXCHANGE: Array[Dictionary] = [
-	{"t": 1.5, "speaker": &"domovoi", "text": "You're awake. Three villages on this rock, and not one of them has settled on what you are."},
+	{"t": 1.5, "speaker": &"domovoi", "text": "You're awake. Fifteen villages on this rock, and not one of them has settled on what you are."},
 	{"t": 6.0, "speaker": &"hiisi", "text": "Two of them have barely heard of you at all. I say we introduce ourselves. Loudly."},
 	{"t": 11.0, "speaker": &"domovoi", "text": "Quietly. Hold the right mouse button and drag a shape over a village — that is a rite. They will feel it. Then they will argue about it for a week."},
 	{"t": 16.5, "speaker": &"hiisi", "text": "And when all three say your name without being asked, the island is yours and I am going to sleep for a year."},
@@ -298,6 +305,14 @@ func _build_far_sea() -> void:
 # ---------------------------------------------------------------------------
 func _place_villages_and_villagers() -> void:
 	var taken: Array[Vector2] = []
+
+	# The three authored villages come first. They are authored not because
+	# their positions matter — those are still resolved against the terrain —
+	# but because they carry scene wiring the generated ones do not: the
+	# walkable Sanctum interior, the InteriorDressing, the opening dialogue's
+	# named subject. Resolving them first also means the planner spreads the
+	# other twelve around them rather than the other way round.
+	var reserved: Array[Dictionary] = []
 	for entry in VILLAGE_DEFS:
 		var anchor: Node3D = get_node(entry.anchor)
 		# The authored X/Z is a WISH, not a position. Since the island became a
@@ -308,6 +323,18 @@ func _place_villages_and_villagers() -> void:
 		# nearest place a village could actually stand.
 		var xz := _find_village_site(Vector2(anchor.position.x, anchor.position.z), taken)
 		taken.append(xz)
+		var resolved := entry.duplicate()
+		resolved["xz"] = xz
+		reserved.append(resolved)
+
+	var plan := SettlementPlanner.plan(_island, TOTAL_VILLAGES, _island.island_seed,
+		VILLAGE_MIN_SEPARATION, reserved)
+
+	for entry in plan:
+		var xz: Vector2 = entry.xz
+		# Authored villages already have their anchor in the scene; planned ones
+		# get an equivalent one built here.
+		var anchor: Node3D = get_node(entry.anchor) if entry.has("anchor") else _build_village_anchor(entry)
 		anchor.position.x = xz.x
 		anchor.position.z = xz.y
 
@@ -347,6 +374,18 @@ func _place_villages_and_villagers() -> void:
 		# _place_villages_and_villagers() rather than per village here.
 		_spawn_calling_stone(entry.id, anchor)
 
+	# Scatter runs at its own _ready(), which is BEFORE this function — children
+	# before parents — so at build time it could only have known the authored
+	# wishes, and nothing at all about the twelve planned villages. Rather than
+	# scatter grass through fifteen settlements, it now waits: the exclusions go
+	# in here, once every village has its final position, and it builds after.
+	var scatter := get_node_or_null(^"TerrainScatter")
+	if scatter:
+		for v_id in GameState.villages:
+			var vv: Village = GameState.villages[v_id]
+			scatter.add_exclusion(vv.position_on_island, 30.0)
+		scatter.rebuild()
+
 	# Every village is registered now, so the crowd can be built. This is the
 	# _ready() ordering trap documented in world/sanctum/sanctum_demo.gd:
 	# children run their _ready() before their parent, so VillagerCrowd cannot
@@ -360,6 +399,38 @@ func _place_villages_and_villagers() -> void:
 	var buildings := get_node_or_null(^"VillageBuildings") as VillageBuildings
 	if buildings:
 		buildings.build()
+
+
+## Builds the scene-side half of a planned village: the anchor, its Sanctum,
+## its Reach border ring and the container the Calling Stone hangs off.
+##
+## Deliberately NOT a scene file. A `village.tscn` would have to hard-code a
+## village_id, and every planned village has a different one, so instancing it
+## would mean instantiating and then overwriting the very thing that makes the
+## scene a scene. The three authored villages in world/god_view.tscn stay
+## authored because they carry more than this — a walkable interior and its
+## dressing — and this must match the parts of them that matter.
+func _build_village_anchor(entry: Dictionary) -> Node3D:
+	var villages_root: Node3D = get_node(^"Villages")
+	var anchor := Node3D.new()
+	anchor.name = String(entry.display).to_pascal_case()
+	villages_root.add_child(anchor)
+
+	var sanctum := SANCTUM_SCENE.instantiate()
+	sanctum.name = "Sanctum"
+	sanctum.village_id = entry.id
+	anchor.add_child(sanctum)
+
+	var ring := MeshInstance3D.new()
+	ring.name = "ReachBorderRing"
+	ring.set_script(REACH_BORDER_SCRIPT)
+	ring.village_id = entry.id
+	anchor.add_child(ring)
+
+	var villagers := Node3D.new()
+	villagers.name = "Villagers"
+	anchor.add_child(villagers)
+	return anchor
 
 
 ## Minimum height a village will settle at — above the surf, not on a beach

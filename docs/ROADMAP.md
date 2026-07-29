@@ -51,11 +51,32 @@ before inventing any name.
 
 *Update this section every commit.*
 
-**Status: Phase 1 in progress. 1a WORKS. 1c (island to ~1200 m) is DONE —
-the island is now 1200 m at resolution 301, cached to disk, with scatter
-chunked for per-region culling. Next is 15 villages, then Phase 2.**
+**Status: Phase 1 DONE. Island is 1200 m, cached, chunked, and carries 15
+villages planned onto the real terrain. Next: the terrain SHAPE is wrong at
+this scale (see below), then Phase 2 (daily life).**
+
+KNOWN PROBLEM, next thing to fix: at 1200 m the island reads as a field of
+near-identical conical hills rather than as ridges, massifs and valleys.
+Cause: when the island grew from 320 m to 1200 m the noise frequencies were
+left alone, so the feature SIZE stayed constant and the feature COUNT went
+up ~14x. Fix is to scale the base frequencies with `size_meters` so a lobe
+stays a lobe. Do this before adding more content on top of it.
 
 Done since the roadmap was written:
+- **Fifteen villages, planned rather than authored.**
+  `world/village/settlement_planner.gd` picks sites off the real heightmap by
+  blue-noise rejection, scores them (level, low, above the surf) so the good
+  ground fills first, and names each one from the ground it stands on —
+  "Sankiln Strand" is on a beach, "Ederhal Dell" is in a basin. The three
+  authored villages stay authored because they carry the walkable Sanctum
+  interior; the other twelve get their Sanctum, Reach ring and Calling Stone
+  built at runtime by `god_view._build_village_anchor()`.
+  Scatter now waits for that placement (`auto_scatter_on_ready = false`)
+  instead of clearing grass around three authored guesses.
+- `scripts_ci/screenshot.gd` grew `SHOT_CAM` (park the camera at an exact
+  position/target — it also stops the rig from driving it, or the next frame
+  puts it back) and `SHOT_DUMP_VILLAGES`. With the layout generated, these
+  are the only way to inspect one particular village out of fifteen.
 - **The island is 1200 m across** (was 320 m), `max_height` 120 m,
   ocean plane 5200 m so no world edge is visible. This is the scale the
   15-village target needs.

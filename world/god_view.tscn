@@ -40,7 +40,7 @@ shadow_enabled = true
 directional_shadow_mode = 0
 
 [node name="GodViewMarker" type="Marker3D" parent="."]
-transform = Transform3D(1, 0, 0, 0, 0.87, 0.5, 0, -0.5, 0.87, 0, 300, 520)
+transform = Transform3D(1, 0, 0, 0, 0.94, 0.34, 0, -0.34, 0.94, 0, 60, 105)
 
 [node name="CameraRig" parent="." instance=ExtResource("7")]
 
@@ -64,7 +64,7 @@ rock_visibility_end = 520.0
 grass_chunk_divisions = 8
 tree_chunk_divisions = 5
 rock_chunk_divisions = 5
-village_anchor_paths = [NodePath("../Villages/FenraytVillage"), NodePath("../Villages/SankilnVillage"), NodePath("../Villages/RaimbornVillage")]
+auto_scatter_on_ready = false
 
 [node name="VillageBuildings" type="Node3D" parent="."]
 script = ExtResource("24")
