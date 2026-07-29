@@ -442,7 +442,10 @@ const VILLAGE_MAX_RELIEF := 5.0
 ## Roughly the Sanctum's worship-yard radius, so "level" is measured over the
 ## area a village actually occupies rather than at a single point.
 const VILLAGE_FOOTPRINT := 11.0
-const VILLAGE_MIN_SEPARATION := 55.0
+## On a 1200 m island 55 m put fifteen villages shoulder to shoulder in
+## whichever corner had the best ground. This is the distance at which two
+## settlements read as separate places from the air.
+const VILLAGE_MIN_SEPARATION := 105.0
 
 ## Returns a spot near `wish` where a village can actually stand: above the
 ## waterline, level enough, and clear of the villages already placed. Spirals

@@ -51,18 +51,28 @@ before inventing any name.
 
 *Update this section every commit.*
 
-**Status: Phase 1 DONE. Island is 1200 m, cached, chunked, and carries 15
-villages planned onto the real terrain. Next: the terrain SHAPE is wrong at
-this scale (see below), then Phase 2 (daily life).**
-
-KNOWN PROBLEM, next thing to fix: at 1200 m the island reads as a field of
-near-identical conical hills rather than as ridges, massifs and valleys.
-Cause: when the island grew from 320 m to 1200 m the noise frequencies were
-left alone, so the feature SIZE stayed constant and the feature COUNT went
-up ~14x. Fix is to scale the base frequencies with `size_meters` so a lobe
-stays a lobe. Do this before adding more content on top of it.
+**Status: Phase 1 DONE. Island is 1200 m, cached, chunked, correctly shaped
+at that scale, and carries 15 villages planned onto the real terrain.
+Next: Phase 2, daily life.**
 
 Done since the roadmap was written:
+- **Terrain shape fixed for the new scale.** Noise frequency is in cycles per
+  METRE, so growing the island from 256 m to 1200 m without touching it gave
+  ~5x as many features at the same size — a field of identical conical hills
+  instead of a landmass, with the detail octave aliasing at two samples per
+  wavelength. Frequencies now scale by `TUNING_SIZE / size_meters`, i.e.
+  cycles per ISLAND. `coast_warp_strength` moved from metres to a fraction of
+  half-size for the same reason: 46 m carved bays into a 256 m island and
+  merely dimpled a 1200 m one, which is how the big island came out a smooth
+  oval — the one shape the design says an island must never be.
+  `FORMULA_VERSION` now goes into the cache key, because these are constants
+  rather than exported parameters and the cache would otherwise keep serving
+  islands built by the old formula.
+- **Terrain height queries outside the island footprint now return open sea.**
+  They used to clamp to the nearest edge sample, so where the island reached
+  the grid boundary every point out to the horizon reported dry land. The
+  ocean's shore mask believed it and cut its own triangles away, leaving two
+  straight ribbons of missing water running to the horizon.
 - **Fifteen villages, planned rather than authored.**
   `world/village/settlement_planner.gd` picks sites off the real heightmap by
   blue-noise rejection, scores them (level, low, above the surf) so the good

@@ -41,12 +41,31 @@ func _ensure_noise() -> void:
 	_build_noise()
 	_noise_built = true
 
+## The island size every frequency below was originally tuned against. Noise
+## frequency is in cycles per METRE, so a frequency that gives one mountain
+## range on a 256 m island gives five on a 1200 m one. Scaling by
+## TUNING_SIZE / size_meters keeps the frequencies in cycles per ISLAND, which
+## is the unit that actually matters: a lobe stays a lobe at any scale.
+##
+## This is not a micro-optimisation, it is the difference between a landmass
+## and an egg carton. When the island first went from 320 m to 1200 m without
+## this, it rendered as a field of ~40 near-identical conical hills — and the
+## detail octave landed at a ~8 m wavelength on a 4 m grid step, i.e. two
+## samples per wavelength, which is exactly the undersampling the comment
+## below warns about.
+const TUNING_SIZE := 256.0
+
+func _frequency_scale() -> float:
+	return TUNING_SIZE / maxf(size_meters, 1.0)
+
 func _build_noise() -> void:
+	var fs := _frequency_scale()
+
 	_continent_noise = FastNoiseLite.new()
 	_continent_noise.seed = island_seed
 	_continent_noise.noise_type = FastNoiseLite.TYPE_SIMPLEX_SMOOTH
-	_continent_noise.frequency = 0.006 / maxf(continent_noise_scale, 0.001)
-	_continent_noise.fractal_octaves = 4
+	_continent_noise.frequency = 0.006 * fs / maxf(continent_noise_scale, 0.001)
+	_continent_noise.fractal_octaves = 5
 	_continent_noise.fractal_gain = 0.5
 	_continent_noise.fractal_lacunarity = 2.0
 
@@ -61,13 +80,20 @@ func _build_noise() -> void:
 	# If `resolution` or `size_meters` changes enough to move the grid step,
 	# re-check these against the same >=4-samples-per-wavelength target
 	# (i.e. keep each noise's finest-octave frequency below roughly
-	# 1 / (4 * grid_step)).
+	# 1 / (4 * grid_step)). `_frequency_scale()` handles size_meters; the
+	# octave counts are what you re-check when `resolution` moves.
+	#
+	# The counts below are one higher than the 256 m tuning because scaling by
+	# island size bought the headroom: at 1200 m / 301 the grid step is 4 m
+	# (was 2 m, so 2x worse) while every wavelength grew 4.7x, a net 2.3x more
+	# samples per wavelength. Spending that on an extra octave puts the fine
+	# detail back that pure proportional scaling would have stretched away.
 	_ridge_noise = FastNoiseLite.new()
 	_ridge_noise.seed = island_seed + 1013
 	_ridge_noise.noise_type = FastNoiseLite.TYPE_SIMPLEX
-	_ridge_noise.frequency = 0.025 / maxf(ridge_noise_scale, 0.001)
+	_ridge_noise.frequency = 0.025 * fs / maxf(ridge_noise_scale, 0.001)
 	_ridge_noise.fractal_type = FastNoiseLite.FRACTAL_RIDGED
-	_ridge_noise.fractal_octaves = 3
+	_ridge_noise.fractal_octaves = 4
 	_ridge_noise.fractal_gain = 0.55
 	_ridge_noise.fractal_lacunarity = 2.1
 
@@ -78,7 +104,10 @@ func _build_noise() -> void:
 	_warp_noise = FastNoiseLite.new()
 	_warp_noise.seed = island_seed + 20261
 	_warp_noise.noise_type = FastNoiseLite.TYPE_SIMPLEX_SMOOTH
-	_warp_noise.frequency = coast_warp_frequency
+	# Scaled like every other frequency: `coast_warp_frequency` is authored in
+	# cycles per metre, and a coastline wiggle tuned for a 256 m island turns
+	# into a frilled edge on a 1200 m one.
+	_warp_noise.frequency = coast_warp_frequency * fs
 	_warp_noise.fractal_octaves = 2
 
 	_build_lobes()
@@ -86,8 +115,8 @@ func _build_noise() -> void:
 	_detail_noise = FastNoiseLite.new()
 	_detail_noise.seed = island_seed + 7331
 	_detail_noise.noise_type = FastNoiseLite.TYPE_SIMPLEX
-	_detail_noise.frequency = 0.06 / maxf(detail_noise_scale, 0.001)
-	_detail_noise.fractal_octaves = 2
+	_detail_noise.frequency = 0.06 * fs / maxf(detail_noise_scale, 0.001)
+	_detail_noise.fractal_octaves = 3
 	_detail_noise.fractal_gain = 0.45
 
 ## Height (meters, relative to sea_level; negative = sea floor) at a point in
@@ -128,14 +157,20 @@ func _build_noise() -> void:
 ## How far lobe centres may sit from the middle, as a fraction of half-size.
 @export_range(0.0, 0.8) var lobe_spread: float = 0.34
 ## Smallest/largest lobe radius, as a fraction of half-size.
-@export var lobe_radius_range := Vector2(0.42, 0.72)
+@export var lobe_radius_range := Vector2(0.52, 0.82)
 ## How elongated a lobe may be. 1.0 = circular; higher stretches it on one
 ## axis, which is what makes the island read as a real landmass rather than
 ## a cluster of circles.
 @export var lobe_stretch_range := Vector2(1.0, 1.9)
-## Coastline irregularity, in metres of displacement. This is the knob that
+## Coastline irregularity, as a FRACTION OF HALF-SIZE. This is the knob that
 ## makes headlands and bays. 0 disables warping entirely.
-@export var coast_warp_strength: float = 46.0
+##
+## Used to be raw metres, which broke the moment the island grew: 46 m of
+## displacement carved real bays into a 256 m island and merely dimpled a
+## 1200 m one, so the big island came out as a smooth oval — the exact shape
+## the design says an island must never be. Expressing it as a fraction makes
+## the coastline as ragged at any scale.
+@export_range(0.0, 0.8) var coast_warp_strength: float = 0.26
 @export var coast_warp_frequency: float = 0.0055
 
 var _lobes: Array = [] # {c: Vector2, r: float, stretch: float, angle: float}
@@ -154,7 +189,7 @@ func _land_mask(local_x: float, local_z: float) -> float:
 		# to get a second, uncorrelated field without a second noise object.
 		var wx := _warp_noise.get_noise_2d(local_x, local_z)
 		var wz := _warp_noise.get_noise_2d(local_x + 4131.0, local_z - 2677.0)
-		p += Vector2(wx, wz) * coast_warp_strength
+		p += Vector2(wx, wz) * (coast_warp_strength * half)
 
 	var best := 0.0
 	for lobe in _lobes:
@@ -347,8 +382,16 @@ func _sample_grid(res: int) -> PackedFloat32Array:
 ## Every parameter that changes the heightmap goes into the key. Miss one and
 ## the cache silently serves the wrong island — which is a far worse failure
 ## than a slow launch, so this is deliberately exhaustive.
+## Bump this whenever a hard-coded number inside `_build_noise()` or the
+## erosion changes. Those are constants, not exported parameters, so they do
+## not appear in the list below — without a version stamp the cache would
+## happily serve an island generated by the OLD formula, and you would spend
+## an afternoon wondering why your edit did nothing.
+const FORMULA_VERSION := 3
+
 func _cache_key(res: int) -> String:
 	var parts := [
+		FORMULA_VERSION,
 		island_seed, res, size_meters, max_height, sea_level,
 		continent_noise_scale, ridge_noise_scale, detail_noise_scale,
 		coastal_falloff_power, smoothing_passes,
@@ -696,6 +739,18 @@ func sample_smoothed_height(local_x: float, local_z: float) -> float:
 		return height_at(local_x, local_z)
 	var res := _cached_resolution
 	var half := size_meters * 0.5
+	# OUTSIDE THE FOOTPRINT IS OPEN SEA, not "whatever the edge row says".
+	#
+	# The clamp below is what makes a query outside the grid read the nearest
+	# edge sample. Where the island runs right up to the grid boundary that
+	# edge sample is LAND, so every point out to the horizon in that direction
+	# reported dry ground. The ocean's shore mask believed it and cut its own
+	# triangles away, leaving two straight ribbons of missing water reaching
+	# from the island's northern tip to the horizon. Anything else that asks
+	# "is there ground here" — scatter, village placement, the Hand — would
+	# have been lied to in exactly the same way.
+	if absf(local_x) > half or absf(local_z) > half:
+		return sea_level - 40.0
 	var step := size_meters / float(res - 1)
 	var fx := clampf((local_x + half) / step, 0.0, float(res - 1))
 	var fz := clampf((local_z + half) / step, 0.0, float(res - 1))
