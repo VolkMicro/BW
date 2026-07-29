@@ -71,6 +71,18 @@ func _build_noise() -> void:
 	_ridge_noise.fractal_gain = 0.55
 	_ridge_noise.fractal_lacunarity = 2.1
 
+	# Low-frequency field used only to displace the coastline sample point —
+	# see _land_mask(). Deliberately smooth: this shapes bays and headlands,
+	# not surface roughness, so high frequency here would fray the coast into
+	# noise rather than shaping it.
+	_warp_noise = FastNoiseLite.new()
+	_warp_noise.seed = island_seed + 20261
+	_warp_noise.noise_type = FastNoiseLite.TYPE_SIMPLEX_SMOOTH
+	_warp_noise.frequency = coast_warp_frequency
+	_warp_noise.fractal_octaves = 2
+
+	_build_lobes()
+
 	_detail_noise = FastNoiseLite.new()
 	_detail_noise.seed = island_seed + 7331
 	_detail_noise.noise_type = FastNoiseLite.TYPE_SIMPLEX
@@ -83,14 +95,101 @@ func _build_noise() -> void:
 ## seed + the three noise layers + radial mask — safe to call from other
 ## systems (village placement, the Hand, footstep raycasts) as long as they
 ## convert world position to this generator's local space first.
-func height_at(local_x: float, local_z: float) -> float:
+## ---------------------------------------------------------------------------
+## COASTLINE SHAPE — why this is not one radial falloff
+##
+## It used to be `1 - r^power` about the centre, which can only ever produce a
+## dome, and a dome reads as a coin dropped in the sea. Real islands are not
+## round: look at any of them on a map and you get something elongated and
+## lobed, with headlands, bays and a coast that doubles back on itself.
+##
+## Two cheap changes get almost all of that:
+##
+##  1. SEVERAL overlapping falloff centres instead of one. The union of a few
+##     offset, differently-sized, elliptical lobes is already an irregular
+##     landmass with peninsulas where lobes meet and bays where they do not
+##     quite. Centres are derived from `island_seed`, so every island is a
+##     different shape rather than the same dome with different bumps.
+##
+##  2. DOMAIN WARPING: before measuring distance, displace the sample point by
+##     a low-frequency noise. This is the standard trick and it is almost free
+##     — it costs two noise lookups — but it is what turns a smooth mathematical
+##     edge into a coastline with inlets and spits. Warp strength is the single
+##     most effective knob here: too little and the island stays a blob, too
+##     much and it dissolves into scattered rocks.
+##
+## The mask is still 1 inland and 0 at sea, so everything downstream (the
+## height blend, the sea-floor sink, erosion, the ocean's shore bake) is
+## unchanged and keeps working.
+## ---------------------------------------------------------------------------
+
+## How many lobes the landmass is built from. 1 reproduces the old dome.
+@export_range(1, 6) var land_lobes: int = 3
+## How far lobe centres may sit from the middle, as a fraction of half-size.
+@export_range(0.0, 0.8) var lobe_spread: float = 0.34
+## Smallest/largest lobe radius, as a fraction of half-size.
+@export var lobe_radius_range := Vector2(0.42, 0.72)
+## How elongated a lobe may be. 1.0 = circular; higher stretches it on one
+## axis, which is what makes the island read as a real landmass rather than
+## a cluster of circles.
+@export var lobe_stretch_range := Vector2(1.0, 1.9)
+## Coastline irregularity, in metres of displacement. This is the knob that
+## makes headlands and bays. 0 disables warping entirely.
+@export var coast_warp_strength: float = 46.0
+@export var coast_warp_frequency: float = 0.0055
+
+var _lobes: Array = [] # {c: Vector2, r: float, stretch: float, angle: float}
+var _warp_noise: FastNoiseLite
+
+## Union of the lobes, sampled at a domain-warped position. 1 = solid inland,
+## 0 = open sea.
+func _land_mask(local_x: float, local_z: float) -> float:
 	_ensure_noise()
 	var half := size_meters * 0.5
-	var nx := local_x / half
-	var nz := local_z / half
-	var r := sqrt(nx * nx + nz * nz)
-	var mask := clampf(1.0 - pow(r, coastal_falloff_power), 0.0, 1.0)
-	mask = smoothstep(0.0, 1.0, mask)
+	var p := Vector2(local_x, local_z)
+
+	if coast_warp_strength > 0.0:
+		# Two lookups at different offsets give an x and a z displacement.
+		# Sampling the same noise at a large constant offset is the usual way
+		# to get a second, uncorrelated field without a second noise object.
+		var wx := _warp_noise.get_noise_2d(local_x, local_z)
+		var wz := _warp_noise.get_noise_2d(local_x + 4131.0, local_z - 2677.0)
+		p += Vector2(wx, wz) * coast_warp_strength
+
+	var best := 0.0
+	for lobe in _lobes:
+		var d: Vector2 = p - lobe.c
+		# Rotate into the lobe's own frame, then squash one axis, so the lobe
+		# is an ellipse at an angle rather than a circle.
+		d = d.rotated(-lobe.angle)
+		d.x /= lobe.stretch
+		var r: float = d.length() / maxf(lobe.r * half, 0.001)
+		var m: float = clampf(1.0 - pow(r, coastal_falloff_power), 0.0, 1.0)
+		best = maxf(best, m)
+	return smoothstep(0.0, 1.0, best)
+
+func _build_lobes() -> void:
+	var rng := RandomNumberGenerator.new()
+	rng.seed = hash(island_seed) ^ 0x10BE5
+	_lobes.clear()
+	for i in land_lobes:
+		# The first lobe sits near the middle so the island always has a
+		# recognisable body; the rest hang off it to make peninsulas.
+		var offset := Vector2.ZERO
+		if i > 0:
+			var a := rng.randf() * TAU
+			var dist := rng.randf_range(0.35, 1.0) * lobe_spread * size_meters * 0.5
+			offset = Vector2(cos(a), sin(a)) * dist
+		_lobes.append({
+			"c": offset,
+			"r": rng.randf_range(lobe_radius_range.x, lobe_radius_range.y),
+			"stretch": rng.randf_range(lobe_stretch_range.x, lobe_stretch_range.y),
+			"angle": rng.randf() * TAU,
+		})
+
+func height_at(local_x: float, local_z: float) -> float:
+	_ensure_noise()
+	var mask := _land_mask(local_x, local_z)
 
 	var continent := _continent_noise.get_noise_2d(local_x, local_z) * 0.5 + 0.5 # 0..1
 	var ridge := _ridge_noise.get_noise_2d(local_x, local_z) # ridged fractal, biased positive
