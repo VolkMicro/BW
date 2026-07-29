@@ -121,10 +121,17 @@ func _apply_culture_skin() -> void:
 		_base_roof_color = _roof_mat.albedo_color
 		_base_altar_emission = _altar_mat.emission
 		return
-	_base_wall_color = culture.color_primary
-	_base_roof_color = culture.color_accent
-	_platform_mat.albedo_color = culture.color_primary.lightened(0.15)
-	_stone_mat.albedo_color = culture.color_primary.darkened(0.2)
+	# The authored culture primaries are extremely dark — Fenrayt's is
+	# (0.106, 0.114, 0.098), which is nearly black. That was fine when the
+	# Sanctum was a bare box lit from every side, but now that a temple roof
+	# (world/village/village_architecture.gd) overhangs it, the walls sit in
+	# their own shade and an almost-black albedo read as a hole punched in the
+	# ground rather than as a building. Lifted toward a timber value; the
+	# culture's hue still comes through, it just is not a void any more.
+	_base_wall_color = culture.color_primary.lerp(Color(0.46, 0.38, 0.30), 0.62)
+	_base_roof_color = culture.color_accent.lerp(Color(1, 1, 1), 0.25)
+	_platform_mat.albedo_color = culture.color_primary.lerp(Color(0.62, 0.58, 0.50), 0.66)
+	_stone_mat.albedo_color = culture.color_primary.lerp(Color(0.44, 0.44, 0.43), 0.55)
 	_base_altar_emission = culture.color_accent
 	_altar_mat.emission = culture.color_accent
 	_wall_mat.albedo_color = _base_wall_color

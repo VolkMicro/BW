@@ -37,7 +37,7 @@ const VillageArch := preload("res://world/village/village_architecture.gd")
 @export var auto_build_on_ready: bool = false
 
 @export_group("Dwellings")
-@export var houses_per_village: int = 10
+@export var houses_per_village: int = 12
 ## Ring the houses occupy around the village centre. The inner radius clears
 ## the Sanctum's own worship yard (a 9 m platform) so nobody builds on it.
 @export var house_ring_inner: float = 13.0
