@@ -1,5 +1,21 @@
 shader_type spatial;
-render_mode world_vertex_coords, blend_mix, depth_draw_opaque, cull_disabled, diffuse_burley, specular_schlick_ggx;
+// LOW-SPEC PATH (see docs/systems/performance_lowspec.md). Three changes from
+// how this shipped, none cosmetic:
+//
+//  * NO hint_screen_texture / hint_depth_texture. Declaring either makes
+//    Godot perform a full-screen buffer copy every frame the material is
+//    visible, whether or not the sample is branched around. That is the
+//    single most expensive thing this project removed from the ocean, and a
+//    handful of river ribbons must not quietly reintroduce it.
+//  * `blend_mix` dropped and `ALPHA` no longer written. Writing ALPHA at all
+//    marks the surface transparent: no depth prepass, no early-Z,
+//    back-to-front sorting. The river was never see-through.
+//  * `cull_disabled` -> `cull_back`. A ribbon is a single layer, so with
+//    culling off its front and back faces land at identical depth and which
+//    one survives is arbitrary — and Godot flips the shading normal on a
+//    back face. That is exactly the bug that made the terrain render as if
+//    lit from below for days (see island_generator.gd's winding comment).
+render_mode world_vertex_coords, depth_draw_opaque, cull_back, diffuse_burley, specular_schlick_ggx;
 
 // TITHE & TERROR — narrow river / coastline-inlet water.
 //
@@ -28,8 +44,14 @@ uniform float flow_time = 0.0;
 uniform float flow_uv_scale = 0.6;
 
 group_uniforms Surface_Color;
-uniform vec4 color_shallow : source_color = vec4(0.322, 0.549, 0.514, 1.0);
-uniform vec4 color_deep : source_color = vec4(0.043, 0.145, 0.169, 1.0);
+// Deliberately pushed toward blue and away from the green the terrain now
+// is. The authored teal-green was almost exactly the colour of the grass it
+// runs through, so from god view a river read as a slightly shinier stripe of
+// grass. Contrast against what surrounds it is what makes water legible at
+// that distance — see docs/systems/worldbuilding_practices.md on value and
+// hue separation being the thing top-down readability actually needs.
+uniform vec4 color_shallow : source_color = vec4(0.30, 0.55, 0.66, 1.0);
+uniform vec4 color_deep : source_color = vec4(0.05, 0.20, 0.34, 1.0);
 uniform float depth_fade_distance = 2.0;
 uniform float refraction_strength = 0.03;
 
@@ -52,8 +74,9 @@ uniform float roughness_base : hint_range(0.0, 1.0) = 0.1;
 uniform float fresnel_power = 4.0;
 uniform vec3 fresnel_tint : source_color = vec3(0.8, 0.85, 0.86);
 
-uniform sampler2D depth_texture : hint_depth_texture, repeat_disable, filter_nearest;
-uniform sampler2D screen_texture : hint_screen_texture, repeat_disable, filter_linear_mipmap;
+// Deliberately no depth/screen samplers — see the render_mode note above.
+// A river's cross-section depth is known from the ribbon's own UV.x (0 at one
+// bank, 1 at the other), which is free and does not need the depth buffer.
 
 varying vec2 v_world_xz;
 varying float v_wave_height_norm;
@@ -113,32 +136,29 @@ void vertex() {
 }
 
 void fragment() {
-	float raw_depth = texture(depth_texture, SCREEN_UV).r;
-	float scene_depth = linearize_depth(raw_depth, SCREEN_UV, INV_PROJECTION_MATRIX);
-	float water_depth = -VERTEX.z;
-	float depth_diff = max(scene_depth - water_depth, 0.0);
-
-	float shallow_mix = clamp(depth_diff / max(depth_fade_distance, 0.001), 0.0, 1.0);
-	vec3 water_color = mix(color_shallow.rgb, color_deep.rgb, shallow_mix);
-
-	vec2 refract_uv = clamp(SCREEN_UV + NORMAL.xz * refraction_strength * shallow_mix, vec2(0.001), vec2(0.999));
-	vec3 refracted = texture(screen_texture, refract_uv).rgb;
-	vec3 base_color = mix(refracted, water_color, clamp(shallow_mix * 1.4, 0.0, 1.0));
+	// Cross-channel depth straight from the ribbon UV: 0 at either bank, 1
+	// mid-stream. This replaces the scene-depth read and is arguably more
+	// correct for a river anyway — a watercourse is deepest in its middle by
+	// definition, whereas the depth buffer only knew how far the bed happened
+	// to be behind the surface.
+	float bank_dist = min(v_uv.x, 1.0 - v_uv.x) * 2.0; // 0 bank .. 1 centre
+	float shallow_mix = smoothstep(0.0, 1.0, bank_dist);
+	vec3 base_color = mix(color_shallow.rgb, color_deep.rgb, shallow_mix);
 
 	vec2 flow_uv = v_uv * flow_uv_scale + flow_direction * flow_time;
 	vec2 e = vec2(0.1, 0.0);
-	float n_c = fbm(flow_uv * micro_normal_scale, 4);
-	float n_x = fbm((flow_uv + e.xy) * micro_normal_scale, 4);
-	float n_z = fbm((flow_uv + e.yx) * micro_normal_scale, 4);
+	float n_c = fbm(flow_uv * micro_normal_scale, 3);
+	float n_x = fbm((flow_uv + e.xy) * micro_normal_scale, 3);
+	float n_z = fbm((flow_uv + e.yx) * micro_normal_scale, 3);
 	vec3 micro_n = vec3(n_c - n_x, 1.0, n_c - n_z);
 	vec3 shaded_normal = normalize(NORMAL + micro_n * micro_normal_strength * vec3(1.0, 0.0, 1.0));
 
-	float bank_dist = min(v_uv.x, 1.0 - v_uv.x);
-	float bank_foam = 1.0 - smoothstep(0.0, bank_foam_width, bank_dist);
-	float shore_foam = 1.0 - smoothstep(0.0, foam_distance, depth_diff);
+	// Foam at the banks and on wave crests. The old shore_foam term needed
+	// scene depth and is folded into bank_foam, which is the same idea.
+	float bank_foam = 1.0 - smoothstep(0.0, bank_foam_width * 2.0, bank_dist);
 	float crest_foam = smoothstep(foam_crest_threshold, foam_crest_threshold + foam_crest_softness, v_wave_height_norm);
-	float foam_mask = clamp(bank_foam + shore_foam + crest_foam, 0.0, 1.0);
-	float breakup = fbm(flow_uv * foam_noise_scale, 4);
+	float foam_mask = clamp(bank_foam + crest_foam, 0.0, 1.0);
+	float breakup = fbm(flow_uv * foam_noise_scale, 3);
 	foam_mask *= mix(0.6, 1.0, breakup);
 
 	vec3 final_color = mix(base_color, foam_color.rgb, clamp(foam_mask, 0.0, 1.0));
@@ -151,5 +171,5 @@ void fragment() {
 	ROUGHNESS = mix(roughness_base, 0.85, foam_mask);
 	METALLIC = 0.02;
 	SPECULAR = mix(0.5, 0.1, foam_mask);
-	ALPHA = 1.0;
 }
+
