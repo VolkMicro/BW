@@ -63,6 +63,13 @@ Done since the roadmap was written:
   village settles on the nearest spot above the surf, level across the
   Sanctum footprint, and clear of its neighbours. Warns rather than
   silently teleporting when no site exists.
+- **Villages have houses, and the Sanctum reads as a temple.**
+  `world/village/` — dwellings placed on real terrain around each village as
+  ONE MultiMesh for the whole island, and a tiered temple superstructure
+  (roof tiers, corner posts, ridge prows) raised over each Sanctum's existing
+  CSG shell so nothing that already worked breaks. This was a legibility fix,
+  not a content one: the player could not tell a Sanctum from a shed, and
+  villages had no dwellings at all.
 - **Villagers are off the scene graph** (1a). `actors/villagers/villager_crowd.gd`
   holds the whole island's population in packed arrays, drawn by ONE
   MultiMesh, standing on the heightmap instead of colliding with it, deciding

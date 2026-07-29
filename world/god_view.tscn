@@ -1,4 +1,4 @@
-[gd_scene load_steps=24 format=3]
+[gd_scene load_steps=25 format=3]
 
 [ext_resource type="Environment" path="res://environment/world_environment.tres" id="1"]
 [ext_resource type="Script" path="res://world/god_view.gd" id="2"]
@@ -23,6 +23,7 @@
 [ext_resource type="Script" path="res://world/terrain/scatter/terrain_scatter.gd" id="21"]
 [ext_resource type="Script" path="res://world/terrain/waterways/river_network.gd" id="22"]
 [ext_resource type="Script" path="res://actors/villagers/villager_crowd.gd" id="23"]
+[ext_resource type="Script" path="res://world/village/village_buildings.gd" id="24"]
 
 [node name="GodView" type="Node3D"]
 script = ExtResource("2")
@@ -55,6 +56,10 @@ sea_level = 0.0
 script = ExtResource("21")
 terrain_path = NodePath("../Island")
 village_anchor_paths = [NodePath("../Villages/FenraytVillage"), NodePath("../Villages/SankilnVillage"), NodePath("../Villages/RaimbornVillage")]
+
+[node name="VillageBuildings" type="Node3D" parent="."]
+script = ExtResource("24")
+terrain_path = NodePath("../Island")
 
 [node name="VillagerCrowd" type="Node3D" parent="."]
 script = ExtResource("23")

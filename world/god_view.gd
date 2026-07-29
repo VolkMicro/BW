@@ -354,6 +354,12 @@ func _place_villages_and_villagers() -> void:
 	var crowd := get_node_or_null(^"VillagerCrowd") as VillagerCrowd
 	if crowd:
 		crowd.populate()
+	# Same ordering reason: houses need the villages' final positions, and the
+	# temple superstructure needs every Sanctum to have finished its own
+	# _ready() (it has, children run first).
+	var buildings := get_node_or_null(^"VillageBuildings") as VillageBuildings
+	if buildings:
+		buildings.build()
 
 
 ## Minimum height a village will settle at — above the surf, not on a beach
