@@ -196,6 +196,14 @@ void vertex() {
 	VERTEX += displacement;
 	NORMAL = wave_normal;
 
+	// NOTE: the ocean's inland triangles are removed on the CPU, in
+	// OceanSurface._bake_shore_mask(), not here. Two shader-side attempts are
+	// recorded there and in this file's history: a fragment `discard`
+	// (reproducibly crashed Godot 4.3 on Mesa lavapipe, signal 11) and
+	// sinking inland vertices in VERTEX (worked, but left long visible skirt
+	// triangles fanning down from the coastline). Dropping whole triangles at
+	// bake time has neither problem and costs nothing per frame.
+
 	v_world_xz = base_xz;
 	v_wave_height_norm = clamp((displacement.y / max(crest_reference_height, 0.001)) * 0.5 + 0.5, 0.0, 1.0);
 }

@@ -216,6 +216,41 @@ func _bake_shore_mask() -> void:
 		colors[i] = Color(depth, depth, depth, 1.0)
 
 	arrays[Mesh.ARRAY_COLOR] = colors
+
+	# DROP THE TRIANGLES THAT ARE ENTIRELY INLAND.
+	#
+	# The comment above reasons that vertices sitting under the island are
+	# "never visible anyway". That was wrong, and it was the single most
+	# expensive wrong assumption in this project's rendering history: those
+	# triangles were drawn straight over the island's interior, and because
+	# their baked depth is 0 — which the shader reads as maximum foam — they
+	# painted it flat white. For several passes that white sheet was mistaken
+	# for the terrain itself, and time went into "why is the island grey"
+	# when the island was not what was on screen. It was finally pinned by
+	# forcing the OCEAN shader's ALBEDO to red and watching the "island" turn
+	# red.
+	#
+	# A triangle is dropped only when ALL THREE of its vertices are dry, so
+	# the water still runs in under the coastline and the shoreline itself is
+	# untouched — the hole left behind is strictly interior to the island and
+	# cannot expose a seam. At the shipping tessellation this removes a few
+	# hundred triangles and gains a little fill rate; the point is
+	# correctness, not the saving.
+	var indices: PackedInt32Array = arrays[Mesh.ARRAY_INDEX]
+	if not indices.is_empty():
+		var kept := PackedInt32Array()
+		var dry := 0.002
+		for t in range(0, indices.size(), 3):
+			var a := indices[t]
+			var b := indices[t + 1]
+			var c := indices[t + 2]
+			if colors[a].r <= dry and colors[b].r <= dry and colors[c].r <= dry:
+				continue
+			kept.append(a)
+			kept.append(b)
+			kept.append(c)
+		arrays[Mesh.ARRAY_INDEX] = kept
+
 	var baked := ArrayMesh.new()
 	baked.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, arrays)
 	mesh = baked
