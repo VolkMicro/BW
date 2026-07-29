@@ -1,4 +1,4 @@
-[gd_scene load_steps=21 format=3]
+[gd_scene load_steps=22 format=3]
 
 [ext_resource type="Environment" path="res://environment/world_environment.tres" id="1"]
 [ext_resource type="Script" path="res://world/god_view.gd" id="2"]
@@ -20,6 +20,7 @@
 [ext_resource type="PackedScene" path="res://environment/graphics_preset.tscn" id="18"]
 [ext_resource type="PackedScene" path="res://actors/wildlife/wildlife_manager.tscn" id="19"]
 [ext_resource type="Script" path="res://ui/voice_log.gd" id="20"]
+[ext_resource type="Script" path="res://world/terrain/scatter/terrain_scatter.gd" id="21"]
 
 [node name="GodView" type="Node3D"]
 script = ExtResource("2")
@@ -46,6 +47,11 @@ size_meters = 320.0
 resolution = 161
 max_height = 58.0
 sea_level = 0.0
+
+[node name="TerrainScatter" type="Node3D" parent="."]
+script = ExtResource("21")
+terrain_path = NodePath("../Island")
+village_anchor_paths = [NodePath("../Villages/FenraytVillage"), NodePath("../Villages/SankilnVillage"), NodePath("../Villages/RaimbornVillage")]
 
 [node name="OceanSurface" type="MeshInstance3D" parent="."]
 script = ExtResource("4")

@@ -102,7 +102,18 @@ void fragment() {
 	// Naklon reshapes ground cover on the same silhouette: near Cruelty,
 	// grass recedes off shallow slopes into bare rock even where the terrain
 	// itself hasn't changed shape.
-	float cruelty_rock_bias = naklon_unit * 0.6;
+	//
+	// NOTE THE max(..., 0.0): Naklon.unit() returns 0.5 at NEUTRAL alignment,
+	// not 0.0 (core/naklon.gd — it maps -1..1 onto 0..1). The original
+	// `naklon_unit * 0.6` therefore stripped 0.3 off the grass mask before the
+	// player had done anything at all, so a brand-new island opened as ~30%
+	// bare rock and read grey. The shader's own header describes the intended
+	// behaviour "at 0", i.e. it was written as though neutral were zero. A
+	// neutral god should look out over a living green island; only a
+	// deliberately cruel one earns bare stone. Cruelty still reaches the same
+	// 0.6 maximum it always did, it just starts from neutral instead of from
+	// full mercy.
+	float cruelty_rock_bias = max(naklon_unit - 0.5, 0.0) * 1.2;
 	float grass_amount = clamp(slope - cruelty_rock_bias, 0.0, 1.0) * (1.0 - beach);
 	float rock_amount = clamp(1.0 - grass_amount - beach, 0.0, 1.0);
 
@@ -113,9 +124,23 @@ void fragment() {
 	// Mercy/Cruelty color grade on top of the blended albedo: rolling green
 	// near Mercy, dry/ash-red near Cruelty. Multiplicative so the base scan
 	// textures stay legible instead of being replaced by a flat tint.
-	vec3 mercy_tint = vec3(0.85, 1.05, 0.85);
+	//
+	// Three-point, not two: a straight mix(mercy, cruelty, naklon_unit) puts
+	// NEUTRAL (unit 0.5, see the note above) at the arithmetic midpoint of a
+	// green and an ash-red, which is a desaturated grey-khaki — the colour of
+	// nothing. That was half of why a fresh island looked lifeless. Neutral
+	// now has its own authored anchor: a believable living green, with mercy
+	// pushing it lusher and cruelty still reaching the same burnt end it did
+	// before. Saturation is deliberately lifted at the green end because the
+	// underlying scan (Grass004) is a muted real-world olive, and read from
+	// god-view distance through fog it needs help to stay green rather than
+	// silting up into grey.
+	vec3 mercy_tint = vec3(0.72, 1.18, 0.62);
+	vec3 neutral_tint = vec3(0.80, 1.10, 0.66);
 	vec3 cruelty_tint = vec3(0.95, 0.72, 0.62);
-	vec3 tint = mix(mercy_tint, cruelty_tint, naklon_unit);
+	vec3 tint = naklon_unit < 0.5
+		? mix(mercy_tint, neutral_tint, naklon_unit * 2.0)
+		: mix(neutral_tint, cruelty_tint, (naklon_unit - 0.5) * 2.0);
 	albedo.rgb *= tint;
 
 	ALBEDO = albedo.rgb;
