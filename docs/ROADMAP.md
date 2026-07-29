@@ -51,8 +51,8 @@ before inventing any name.
 
 *Update this section every commit.*
 
-**Status: Phase 1 started — §7 island shape and part of 1e (camera) are done.
-The big item, 1a (villagers off the scene graph), is NOT started.**
+**Status: Phase 1 in progress. 1a (villagers off the scene graph) now WORKS.
+1c (island to ~1200 m) is the next blocker.**
 
 Done since the roadmap was written:
 - Island is no longer a dome: lobed elliptical falloff centres plus a
@@ -63,6 +63,15 @@ Done since the roadmap was written:
   village settles on the nearest spot above the surf, level across the
   Sanctum footprint, and clear of its neighbours. Warns rather than
   silently teleporting when no site exists.
+- **Villagers are off the scene graph** (1a). `actors/villagers/villager_crowd.gd`
+  holds the whole island's population in packed arrays, drawn by ONE
+  MultiMesh, standing on the heightmap instead of colliding with it, deciding
+  on a round-robin budget (`agents_per_tick`) with a distance-based detail
+  cutoff. Verified running at 120 (3 x 40) where the old node-per-villager
+  build ran 15. Not yet measured on real hardware.
+  Still to do on 1a: `systems/economy/` should read `count_job()` from the
+  crowd rather than the authored `Village.jobs` dictionary, and the old
+  `villager.gd` node path is still present for the standalone demo.
 - Camera zoom is tied to the island instead of magic numbers:
   `god_max_view_fraction` (0.7) derives the zoom-out limit from
   `size_meters` and the vertical FOV, so it keeps meaning "70% of the
@@ -91,7 +100,7 @@ What genuinely works right now:
 - Graphics presets LOW/MEDIUM/HIGH (`P` cycles at runtime). LOW is default and
   is tuned for integrated Intel graphics.
 
-Scale today: island 320 m, 3 villages, 5 villagers each.
+Scale today: island 320 m, 3 villages, **40 villagers each (120 total)**.
 
 ---
 

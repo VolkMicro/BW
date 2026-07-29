@@ -338,8 +338,22 @@ func _place_villages_and_villagers() -> void:
 		if sanctum:
 			_sanctums.append(sanctum)
 
-		_spawn_villagers(entry.id, anchor)
+		# NOTE: individual villager nodes are no longer spawned here. The whole
+		# island's population now lives in the VillagerCrowd node as packed
+		# arrays drawn by one MultiMesh — see actors/villagers/villager_crowd.gd
+		# for why 600 CharacterBody3D villagers is a different program, not a
+		# bigger one. The crowd populates itself from GameState after every
+		# village has registered, which is why it is kicked off at the END of
+		# _place_villages_and_villagers() rather than per village here.
 		_spawn_calling_stone(entry.id, anchor)
+
+	# Every village is registered now, so the crowd can be built. This is the
+	# _ready() ordering trap documented in world/sanctum/sanctum_demo.gd:
+	# children run their _ready() before their parent, so VillagerCrowd cannot
+	# populate itself — at its own _ready() GameState is still empty.
+	var crowd := get_node_or_null(^"VillagerCrowd") as VillagerCrowd
+	if crowd:
+		crowd.populate()
 
 
 ## Minimum height a village will settle at — above the surf, not on a beach

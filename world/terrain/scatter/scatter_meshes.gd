@@ -205,3 +205,69 @@ static func triangle_count(mesh: Mesh) -> int:
 			var verts: PackedVector3Array = arrays[Mesh.ARRAY_VERTEX]
 			total += verts.size() / 3
 	return total
+
+# --------------------------------------------------------------------------
+# Villager
+# --------------------------------------------------------------------------
+
+## One person, for `VillagerCrowd`'s MultiMesh. Deliberately tiny: a tapered
+## body and a head, ~40 triangles.
+##
+## The temptation is to make this better-looking. Resist it — this mesh is
+## instanced up to ~600 times in a single draw call on integrated graphics, so
+## every triangle here is paid six hundred times over, and at the distance a
+## god actually watches from what carries is the SILHOUETTE and the fact that
+## it moves. A tapered upright blob with a head reads unmistakably as a person
+## at fifty metres; the detail budget belongs to the things the camera stops
+## on, not to the crowd.
+##
+## COLOR.a is 0 everywhere so that if these are ever drawn with the foliage
+## shader (which uses alpha as a wind-sway mask) they stand still rather than
+## swaying like grass.
+static func build_villager(height: float = 1.7) -> ArrayMesh:
+	var st := SurfaceTool.new()
+	st.begin(Mesh.PRIMITIVE_TRIANGLES)
+
+	var seg := 6
+	var hip := height * 0.42
+	var shoulder := height * 0.80
+	var head_y := height * 0.90
+	var r_hip := height * 0.115
+	var r_shoulder := height * 0.095
+
+	var cloth := Color(0.30, 0.26, 0.21, 0.0)
+	var cloth_lit := Color(0.40, 0.35, 0.29, 0.0)
+	var skin := Color(0.52, 0.40, 0.31, 0.0)
+
+	# Body: a closed tapered prism from hip to shoulder, plus a skirt down to
+	# the ground so there are no legs to animate and nothing to intersect the
+	# terrain awkwardly on a slope.
+	for i in seg:
+		var a0: float = TAU * float(i) / float(seg)
+		var a1: float = TAU * float(i + 1) / float(seg)
+		var b0 := Vector3(cos(a0) * r_hip, 0.0, sin(a0) * r_hip)
+		var b1 := Vector3(cos(a1) * r_hip, 0.0, sin(a1) * r_hip)
+		var h0 := Vector3(cos(a0) * r_hip, hip, sin(a0) * r_hip)
+		var h1 := Vector3(cos(a1) * r_hip, hip, sin(a1) * r_hip)
+		var s0 := Vector3(cos(a0) * r_shoulder, shoulder, sin(a0) * r_shoulder)
+		var s1 := Vector3(cos(a1) * r_shoulder, shoulder, sin(a1) * r_shoulder)
+		var n := (b0 + b1).normalized()
+		_tri(st, b0, h1, b1, cloth, cloth, cloth, n)
+		_tri(st, b0, h0, h1, cloth, cloth, cloth, n)
+		_tri(st, h0, s1, h1, cloth, cloth_lit, cloth, n)
+		_tri(st, h0, s0, s1, cloth, cloth_lit, cloth_lit, n)
+
+	# Head: a small octahedron. Cheaper than a sphere and, at this size, reads
+	# the same.
+	var top := Vector3(0.0, head_y + height * 0.10, 0.0)
+	var bot := Vector3(0.0, head_y - height * 0.03, 0.0)
+	var hr := height * 0.062
+	for i in 4:
+		var a0: float = TAU * float(i) / 4.0
+		var a1: float = TAU * float(i + 1) / 4.0
+		var e0 := Vector3(cos(a0) * hr, head_y + height * 0.035, sin(a0) * hr)
+		var e1 := Vector3(cos(a1) * hr, head_y + height * 0.035, sin(a1) * hr)
+		_tri(st, e0, top, e1, skin, skin, skin, (e0 + e1).normalized().lerp(Vector3.UP, 0.5).normalized())
+		_tri(st, e1, bot, e0, skin, skin, skin, (e0 + e1).normalized().lerp(Vector3.DOWN, 0.5).normalized())
+
+	return st.commit()
