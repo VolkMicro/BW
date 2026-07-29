@@ -29,6 +29,13 @@ func _ready() -> void:
 	var instance := packed.instantiate()
 	add_child(instance)
 
+	# SHOT_DAY_PHASE=0..1: jump the world clock (0 = sunrise, 0.25 = noon,
+	# 0.5 = sunset, 0.75 = midnight). The day is ten real minutes long, so
+	# without this a shot can only ever show the minute the harness booted in.
+	var phase_spec := OS.get_environment("SHOT_DAY_PHASE")
+	if not phase_spec.is_empty():
+		Weather.set("_elapsed", float(phase_spec) * Weather.DAY_LENGTH_SECONDS)
+
 	for i in range(frames):
 		await get_tree().process_frame
 

@@ -37,6 +37,13 @@ var current: Dictionary = {
 	"cloud_cover": 0.2,
 	"temperature_c": 15.0,
 	"is_storm": false,
+	# Where we are in the island's day. 0.0 = sunrise, 0.25 = noon,
+	# 0.5 = sunset, 0.75 = midnight. Published here rather than in a separate
+	# clock because the diurnal temperature curve below was already keeping
+	# this number privately, and two clocks that can disagree is a bug waiting
+	# to be filed.
+	"day_phase": 0.0,
+	"is_night": false,
 	"source": "procedural",
 	"storm_intensity": 0.0,
 	"updated_unix_time": 0.0,
@@ -206,6 +213,8 @@ func _recompute_current() -> void:
 
 	current.temperature_c = _ambient_temperature() \
 		- current.cloud_cover * 3.0 - current.precipitation * 2.0
+	current.day_phase = day_phase()
+	current.is_night = is_night()
 	current.source = "procedural"
 	current.updated_unix_time = Time.get_unix_time_from_system()
 
@@ -217,8 +226,20 @@ func _recompute_current() -> void:
 	weather_changed.emit(current)
 
 func _ambient_temperature() -> float:
-	var phase := (_elapsed / DAY_LENGTH_SECONDS) * TAU
-	return BASE_TEMPERATURE_C + sin(phase) * DIURNAL_SWING_C
+	return BASE_TEMPERATURE_C + sin(day_phase() * TAU) * DIURNAL_SWING_C
+
+## 0.0 = sunrise, 0.25 = noon, 0.5 = sunset, 0.75 = midnight.
+##
+## Read this rather than `current.day_phase` when you need it smooth: `current`
+## is only recomputed every EMIT_INTERVAL (1.5 s), which is fine for deciding
+## whether people are asleep and visibly wrong for moving the sun.
+func day_phase() -> float:
+	return fposmod(_elapsed / DAY_LENGTH_SECONDS, 1.0)
+
+## True between sunset and sunrise. The one place the day/night boundary is
+## defined — everything else asks.
+func is_night() -> bool:
+	return day_phase() > 0.5
 
 # --- Real-weather feed (Open-Meteo) ----------------------------------------
 
@@ -275,6 +296,12 @@ func _on_request_completed(result: int, response_code: int, _headers: PackedStri
 	current.precipitation = mapped.precipitation
 	current.storm_intensity = mapped.storm_intensity
 	current.is_storm = mapped.is_storm or current.wind_speed > STORM_WIND_SPEED_MIN
+	# The real feed carries no clock for OUR island — it reports the sky over a
+	# real latitude/longitude, not the hour on the Ninefold Sea. Day phase
+	# therefore stays on the local simulated cycle whichever source is driving
+	# the weather, so the sun never jumps when the feed is switched on.
+	current.day_phase = day_phase()
+	current.is_night = is_night()
 	current.source = "real_feed"
 	current.updated_unix_time = Time.get_unix_time_from_system()
 

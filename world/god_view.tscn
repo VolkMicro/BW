@@ -1,4 +1,4 @@
-[gd_scene load_steps=25 format=3]
+[gd_scene load_steps=26 format=3]
 
 [ext_resource type="Environment" path="res://environment/world_environment.tres" id="1"]
 [ext_resource type="Script" path="res://world/god_view.gd" id="2"]
@@ -18,6 +18,7 @@
 [ext_resource type="PackedScene" path="res://environment/naklon_environment_driver.tscn" id="16"]
 [ext_resource type="PackedScene" path="res://environment/weather_environment_driver.tscn" id="17"]
 [ext_resource type="PackedScene" path="res://environment/graphics_preset.tscn" id="18"]
+[ext_resource type="PackedScene" path="res://environment/day_cycle_driver.tscn" id="25"]
 [ext_resource type="PackedScene" path="res://actors/wildlife/wildlife_manager.tscn" id="19"]
 [ext_resource type="Script" path="res://ui/voice_log.gd" id="20"]
 [ext_resource type="Script" path="res://world/terrain/scatter/terrain_scatter.gd" id="21"]
@@ -38,6 +39,9 @@ light_color = Color(1, 0.96, 0.89, 1)
 light_angular_distance = 0.6
 shadow_enabled = true
 directional_shadow_mode = 0
+
+[node name="DayCycleDriver" parent="." instance=ExtResource("25")]
+sun_path = NodePath("../Sun")
 
 [node name="GodViewMarker" type="Marker3D" parent="."]
 transform = Transform3D(1, 0, 0, 0, 0.94, 0.34, 0, -0.34, 0.94, 0, 60, 105)

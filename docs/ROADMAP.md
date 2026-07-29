@@ -56,6 +56,23 @@ at that scale, and carries 15 villages planned onto the real terrain.
 Next: Phase 2, daily life.**
 
 Done since the roadmap was written:
+- **The sun moves.** `environment/day_cycle_driver.gd` drives the scene's
+  DirectionalLight3D off `Weather.day_phase()` — a ten-minute day, sunrise
+  through noon to a cold dim night. Phase 2 is about villagers having a day,
+  and none of that reads if the light never changes. The clock already
+  existed (Weather has run a diurnal temperature curve since it was written);
+  it was simply never connected to anything visible.
+  Night is deliberately not black — this is a game played from the air, and
+  half of every cycle spent staring at an unreadable shape is not atmosphere.
+  Villages read as points of light at night, which came free from the
+  Sanctum altar emission.
+  STILL TO DO: the sky does not darken with it, so at night a dim island sits
+  under a bright blue sky. `environment/weather_environment_driver.gd` owns
+  the environment baselines — layer the day factor there rather than fighting
+  it from the day cycle driver.
+- `scripts_ci/screenshot.gd` grew `SHOT_DAY_PHASE` (0 = sunrise, 0.25 = noon,
+  0.75 = midnight). Without it a shot can only ever show the minute the
+  harness happened to boot in.
 - **Terrain shape fixed for the new scale.** Noise frequency is in cycles per
   METRE, so growing the island from 256 m to 1200 m without touching it gave
   ~5x as many features at the same size — a field of identical conical hills
