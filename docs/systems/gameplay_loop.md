@@ -185,13 +185,15 @@ Three terminal states, checked at 1 Hz and on every conversion/loss
 | Ending | Condition | Card |
 |---|---|---|
 | **VICTORY** | every village fully converted | "THE ISLAND IS YOURS" |
-| **DIVIDED** | everything still standing is converted, but ≥1 village was lost | "THE ISLAND IS DIVIDED — 2 of 3 villages are yours. 1 answer to Pohjola, and there is no way back through that door." |
+| ~~**DIVIDED**~~ | RETIRED — see below | — |
 | **DEFEAT** | every village lost | "THE ISLAND IS HERS" |
 
 Every card lists the epithets mortals actually coined for you, which is the
 game's own stated scorecard, or admits that nobody bothered.
 
-**Why DIVIDED exists.** A village Louhi takes sets `loyal_to_rival = true`
+**Why DIVIDED is retired.** It ended the island the moment every village was either converted or lost, because a lost village could never be taken back. `systems/faith/reclaim.gd` makes every village Louhi holds contestable — ten clean rites break her grip — so declaring the island finished while the player still has a move is the game giving up on their behalf. The island now runs until one god holds all of it, which is the end state the design asks for. The original reasoning, kept because it explains the shape of the code:
+
+**Why DIVIDED existed.** A village Louhi takes sets `loyal_to_rival = true`
 (`actors/louhi/louhi_director.gd:321`) and there is **no reclaim mechanic
 anywhere in this codebase** — her own doc calls tier 2 "a one-way door". So
 after one loss, VICTORY is permanently unreachable. Without a third ending

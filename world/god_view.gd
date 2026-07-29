@@ -204,6 +204,11 @@ const OPENING_EXCHANGE: Array[Dictionary] = [
 const NUDGE_CAMERA_AFTER := 14.0
 const NUDGE_RITE_AFTER := 26.0
 
+## DIVIDED is retired, not deleted: it is still in the enum so nothing that
+## saved or logged the value breaks, but it can no longer be declared. It
+## meant "every village is either yours or hers, and the ones that are hers
+## can never come back", which stopped being true when
+## systems/faith/reclaim.gd landed. See _check_end_state().
 enum Ending { NONE, VICTORY, DIVIDED, DEFEAT }
 
 @onready var _island: IslandTerrain = $Island
@@ -935,12 +940,22 @@ func _check_end_state() -> void:
 		return
 	if lost >= total:
 		_declare_ending(Ending.DEFEAT, converted, lost, total)
-	elif converted + lost >= total:
-		# Everything still standing believes. If nothing was lost that is the
-		# island; if something was, this is as far as the island can ever go,
-		# and saying so is more honest than leaving the player to grind a
-		# village that can never be taken back.
-		_declare_ending(Ending.VICTORY if lost == 0 else Ending.DIVIDED, converted, lost, total)
+	elif converted >= total:
+		_declare_ending(Ending.VICTORY, converted, lost, total)
+	# NO DIVIDED ENDING WHILE ANYTHING IS STILL CONTESTABLE.
+	#
+	# This used to end the island as DIVIDED the moment every village was
+	# either converted or lost, on the reasoning that a lost village "can
+	# never be taken back" and grinding at one would be cruel. That was true
+	# when it was written and is not true any more —
+	# `systems/faith/reclaim.gd` makes every village she holds contestable, so
+	# calling the island finished while ten rites would win one back is the
+	# game giving up on the player's behalf.
+	#
+	# What is left is the design's own end state: the island runs until one
+	# god holds all of it. A long stalemate is not a bug in that; it is two
+	# gods who are evenly matched, and she gets faster every time she wins,
+	# so it will not stay even.
 
 
 func _declare_ending(ending: int, converted: int, lost: int, total: int) -> void:
@@ -951,9 +966,6 @@ func _declare_ending(ending: int, converted: int, lost: int, total: int) -> void
 		Ending.VICTORY:
 			title = "THE ISLAND IS YOURS"
 			body = "All %d villages say your name without being asked for it." % total
-		Ending.DIVIDED:
-			title = "THE ISLAND IS DIVIDED"
-			body = "%d of %d villages are yours. %d answer to Pohjola, and there is no way back through that door." % [converted, total, lost]
 		Ending.DEFEAT:
 			title = "THE ISLAND IS HERS"
 			body = "Every village on this rock answers to Louhi. You are still awake. That is the whole of what you are now."
@@ -970,10 +982,7 @@ func _declare_ending(ending: int, converted: int, lost: int, total: int) -> void
 	match ending:
 		Ending.VICTORY:
 			_voice_log.push_line(&"domovoi", "That is the whole island. I would like it on record that the ledger balanced, which has never once happened before.")
-			_voice_log.push_line(&"hiisi", "Record it, frame it, eat it. I am going to sleep in the biggest of the three.")
-		Ending.DIVIDED:
-			_voice_log.push_line(&"domovoi", "Most of it. Most is not all, and I am the one who has to write down which.")
-			_voice_log.push_line(&"hiisi", "Leave a blank line. Blank lines are delicious and nobody argues with them.")
+			_voice_log.push_line(&"hiisi", "Record it, frame it, eat it. I am going to sleep in the biggest hall on the island and nobody is to wake me.")
 		Ending.DEFEAT:
 			_voice_log.push_line(&"domovoi", "She did not hurry. That is the part I would like you to sit with.")
 			_voice_log.push_line(&"hiisi", "I would make a joke here. I have looked at it from three sides. There isn't one.")
