@@ -418,6 +418,62 @@ func total_alive() -> int:
 	return _alive.size()
 
 
+## How many living prey animals are within `radius` of a point.
+##
+## Added for the villagers' hunting job (actors/villagers/villager_crowd.gd,
+## systems/economy/village_economy.gd): a hunt should only feed a village when
+## there is actually game on that hillside. Predators are excluded — a village
+## hunting party is not going after the thawjaw.
+func prey_near(world_xz: Vector2, radius: float) -> int:
+	var r2 := radius * radius
+	var n := 0
+	for c in _alive:
+		if not is_instance_valid(c) or not c.is_alive():
+			continue
+		if c.species != null and not c.species.is_prey:
+			continue
+		var p: Vector3 = c.global_position
+		var dx: float = p.x - world_xz.x
+		var dz: float = p.z - world_xz.y
+		if dx * dx + dz * dz <= r2:
+			n += 1
+	return n
+
+
+## Takes one prey animal near `world_xz` — the villagers' kill. Returns true
+## if something was actually taken.
+##
+## Routed through report_kill() rather than quietly despawning, so a hunted
+## animal is the same event as a predated one: the scavengers hear about the
+## carcass, the Voices remark, and `prey_killed` fires for anything else
+## listening. A village's hunt genuinely thins the herd, and `respawn_prey`
+## brings it back over `respawn_interval` — so hunting the same hillside
+## every day stops paying, which is the whole point of having animals rather
+## than a food button.
+func take_prey(world_xz: Vector2, radius: float) -> bool:
+	var r2 := radius * radius
+	var best: WildCreature = null
+	var best_d := INF
+	for c in _alive:
+		if not is_instance_valid(c) or not c.is_alive():
+			continue
+		if c.species != null and not c.species.is_prey:
+			continue
+		var p: Vector3 = c.global_position
+		var dx: float = p.x - world_xz.x
+		var dz: float = p.z - world_xz.y
+		var d: float = dx * dx + dz * dz
+		if d <= r2 and d < best_d:
+			best_d = d
+			best = c
+	if best == null:
+		return false
+	report_kill(best, null)
+	if is_instance_valid(best):
+		best.queue_free()
+	return true
+
+
 # ---------------------------------------------------------------------------
 # Events the creatures report back
 # ---------------------------------------------------------------------------

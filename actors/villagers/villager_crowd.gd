@@ -59,7 +59,7 @@ signal villager_died(village_id: StringName, cause: StringName)
 
 const TerrainScatterMeshes := preload("res://world/terrain/scatter/scatter_meshes.gd")
 
-enum Job { IDLE, FISHING, FIELD, WOODCUTTING, BUILDING, FAMILY }
+enum Job { IDLE, FISHING, FIELD, WOODCUTTING, BUILDING, FAMILY, HUNTING }
 enum State { WALKING, WORKING, RESTING }
 
 @export var terrain_path: NodePath
@@ -230,6 +230,8 @@ func _find_work_sites(centre: Vector2) -> Dictionary:
 	var best_wood_score := -1e9
 	var best_field := centre
 	var best_field_score := -1e9
+	var best_wild := centre
+	var best_wild_score := -1e9
 
 	for ring: float in [28.0, 48.0, 72.0, 100.0]:
 		for i in 16:
@@ -250,6 +252,15 @@ func _find_work_sites(centre: Vector2) -> Dictionary:
 				if w > best_wood_score:
 					best_wood_score = w
 					best_wood = p
+			# The wilds: the opposite of a field — the furthest ground from
+			# home that a person can still walk to. Hunters go out, not round
+			# the corner, and that is most of what makes the job read as
+			# hunting from the air.
+			if h > 2.0:
+				var g := dist * 0.4 + h * 0.2
+				if g > best_wild_score:
+					best_wild_score = g
+					best_wild = p
 			# Fields: gentle, mid-height ground close to home.
 			if h > 3.0 and h < 18.0:
 				var f := -absf(h - 9.0) - dist * 0.12
@@ -260,7 +271,19 @@ func _find_work_sites(centre: Vector2) -> Dictionary:
 	sites[Job.FISHING] = Vector3(best_shore.x, _height(best_shore), best_shore.y)
 	sites[Job.WOODCUTTING] = Vector3(best_wood.x, _height(best_wood), best_wood.y)
 	sites[Job.FIELD] = Vector3(best_field.x, _height(best_field), best_field.y)
+	sites[Job.HUNTING] = Vector3(best_wild.x, _height(best_wild), best_wild.y)
 	return sites
+
+## Where this village's hunters are working, in world XZ. The economy asks, so
+## it can check whether there is actually any game on that hillside before
+## crediting a hunt (systems/economy/village_economy.gd).
+func hunting_ground(village_id: StringName) -> Vector2:
+	var vi := _village_ids.find(village_id)
+	if vi < 0:
+		return Vector2.ZERO
+	var sites: Dictionary = _village_sites[vi]
+	var site: Vector3 = sites.get(Job.HUNTING, sites[Job.IDLE])
+	return Vector2(site.x, site.z)
 
 # ---------------------------------------------------------------------------
 # Ticking
@@ -343,8 +366,13 @@ func _decide(i: int) -> void:
 		# effort within food work rather than changing how much food is wanted.
 		var wet: float = clampf(precip, 0.0, 1.0)
 		var weights := {
-			Job.FIELD: 0.20 + food_need * 1.5 * (0.55 + wet * 0.45),
-			Job.FISHING: 0.16 + food_need * 1.5 * (0.45 - wet * 0.40),
+			Job.FIELD: 0.20 + food_need * 1.2 * (0.55 + wet * 0.45),
+			Job.FISHING: 0.16 + food_need * 1.2 * (0.45 - wet * 0.40),
+			# Hunting is the food a village goes out for. Weighted lower than
+			# the fields because it is further, riskier and — unlike a field —
+			# it can run out: the economy only credits a hunt when there is
+			# game left near the hunting ground.
+			Job.HUNTING: 0.10 + food_need * 0.8,
 			Job.WOODCUTTING: 0.16 + wood_need * 1.7,
 			# The floor under home life is what stops a village in trouble from
 			# turning into a workforce with no families in it.

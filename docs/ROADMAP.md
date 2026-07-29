@@ -79,6 +79,24 @@ Done since the roadmap was written:
      field hand fed eighteen people, so every village sat pinned at its
      storage cap and no shortage could ever happen. Food per worker 0.9 ->
      0.22, wood 0.7 -> 0.16, firewood burn 0.004 -> 0.012 per head.
+- **Hunting is real** (this was Phase 4, pulled forward because it is part of
+  the daily life the brief asks for). Villagers take a HUNTING job and walk
+  out to the wilds — the furthest walkable ground from home, which is most of
+  what makes the job read as hunting from the air. The economy only credits a
+  hunt when there is actually game near that ground, and every ~26
+  hunter-seconds takes one real animal out of the wildlife population through
+  the same path a predator's kill takes, so scavengers and Voices hear about
+  it. Hunting the same hillside every day stops paying until the herd
+  recovers. Wildlife scaled to the 1200 m island: spawn radius 105 -> 520,
+  74 creatures instead of 16.
+  PERF RISK TO WATCH: those are 74 real nodes with per-frame AI. If the
+  frame budget gets tight on the target laptop, they are the next thing to
+  move into a MultiMesh crowd, exactly like the villagers were.
+- The objective line now names the island's shortages ("3 hungry (harvest)"),
+  and help rites deliver REAL goods — harvest/rain_call food,
+  lumber/repair wood. A rite named harvest that produced no food was
+  survivable while nobody ate; it became a lie the moment the HUD started
+  telling the player to cast it at a famine.
 - **The sun moves.** `environment/day_cycle_driver.gd` drives the scene's
   DirectionalLight3D off `Weather.day_phase()` — a ten-minute day, sunrise
   through noon to a cold dim night. Phase 2 is about villagers having a day,

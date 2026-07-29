@@ -48,6 +48,19 @@ const FOOD_PER_WORKER_PER_SEC: float = 0.22  # per villager in "fishing" or "fie
 const WOOD_PER_WORKER_PER_SEC: float = 0.16  # per villager in "woodcutting"
 const STONE_PER_HEAD_PER_SEC: float = 0.04   # ambient quarrying/beachcombing, whole population
 const FOOD_PER_GATHERING_HOUSE_PER_SEC: float = 0.5
+
+## -- hunting ---------------------------------------------------------------
+##
+## A hunter is worth more than a field hand, and unlike a field the hillside
+## can be emptied. Every so often a village's hunting party actually takes an
+## animal out of the real wildlife population, so hunting the same ground every
+## day stops paying until it recovers (WildlifeManager.respawn_interval). That
+## is the difference between animals and a food button.
+const FOOD_PER_HUNTER_PER_SEC: float = 0.34
+## How far from the hunting ground game still counts.
+const HUNT_RANGE: float = 70.0
+## Seconds of hunting work that add up to one animal taken.
+const HUNT_SECONDS_PER_KILL: float = 26.0
 const WORKYARD_PRODUCTION_BONUS: float = 0.25 # additive, per Workyard, applied to wood+stone
 const FOOD_UPKEEP_PER_HEAD_PER_SEC: float = 0.05
 
@@ -95,6 +108,9 @@ var _warned_overflow: Dictionary = {} # StringName -> {resource: bool}, one Voic
 ## been going without, in seconds. Reset the moment the shortage ends.
 var _need_time: Dictionary = {}
 var _crowd: Node = null
+var _wildlife: Node = null
+## village_id -> accumulated hunter-seconds not yet spent on an animal.
+var _hunt_progress: Dictionary = {}
 
 ## Which VillagerCrowd to read job counts from. Left empty, the first one in
 ## the scene is used, so a scene needs no wiring.
@@ -137,12 +153,14 @@ func _tick_production(village: Village, delta: float) -> void:
 	var fishing: int = counts.fishing
 	var field: int = counts.field
 	var woodcutting: int = counts.woodcutting
+	var hunting: int = counts.hunting
 
 	var structure_bonus := 1.0 + float(_count_building(village, &"workyard")) * WORKYARD_PRODUCTION_BONUS
 	if SwiftYardsWonder.is_present(village):
 		structure_bonus += SwiftYardsWonder.PRODUCTION_BONUS_MULTIPLIER
 
 	var food_gain := (float(fishing + field) * FOOD_PER_WORKER_PER_SEC
+		+ _hunt_yield(village, hunting, delta)
 		+ float(_count_building(village, &"gathering_house")) * FOOD_PER_GATHERING_HOUSE_PER_SEC) * delta
 	var wood_gain := float(woodcutting) * WOOD_PER_WORKER_PER_SEC * structure_bonus * delta
 	var stone_gain := float(village.population) * STONE_PER_HEAD_PER_SEC * structure_bonus * delta
@@ -183,11 +201,13 @@ func _job_counts(village: Village) -> Dictionary:
 			"fishing": int(jobs.get("fishing", 0)),
 			"field": int(jobs.get("field", 0)),
 			"woodcutting": int(jobs.get("woodcutting", 0)),
+			"hunting": 0,
 		}
 	return {
 		"fishing": crowd.count_job(village.id, VillagerCrowd.Job.FISHING),
 		"field": crowd.count_job(village.id, VillagerCrowd.Job.FIELD),
 		"woodcutting": crowd.count_job(village.id, VillagerCrowd.Job.WOODCUTTING),
+		"hunting": crowd.count_job(village.id, VillagerCrowd.Job.HUNTING),
 	}
 
 
@@ -223,6 +243,52 @@ func _tick_needs(village: Village, delta: float, hungry: bool, freezing: bool) -
 		timers["said_cold"] = false
 
 	_need_time[village.id] = timers
+
+
+## Food per second from this village's hunters — zero if the hillside they
+## work is empty of game. Also spends their effort: every
+## HUNT_SECONDS_PER_KILL worth of hunting takes one real animal out of the
+## population, through the same path a predator's kill takes, so the
+## scavengers and the Voices hear about it.
+func _hunt_yield(village: Village, hunters: int, delta: float) -> float:
+	if hunters <= 0:
+		return 0.0
+	var crowd := _resolve_crowd()
+	var wildlife := _resolve_wildlife()
+	if crowd == null or wildlife == null:
+		# No wildlife in this scene (the standalone economy demo): hunters are
+		# just slower gatherers rather than silently producing nothing.
+		return float(hunters) * FOOD_PER_HUNTER_PER_SEC * 0.5
+	var ground: Vector2 = crowd.hunting_ground(village.id)
+	if wildlife.prey_near(ground, HUNT_RANGE) <= 0:
+		return 0.0
+
+	var progress: float = float(_hunt_progress.get(village.id, 0.0)) + float(hunters) * delta
+	while progress >= HUNT_SECONDS_PER_KILL:
+		progress -= HUNT_SECONDS_PER_KILL
+		if not wildlife.take_prey(ground, HUNT_RANGE):
+			break
+	_hunt_progress[village.id] = progress
+	return float(hunters) * FOOD_PER_HUNTER_PER_SEC
+
+
+func _resolve_wildlife() -> Node:
+	if _wildlife != null and is_instance_valid(_wildlife):
+		return _wildlife
+	_wildlife = _search_wildlife(get_tree().current_scene)
+	return _wildlife
+
+
+func _search_wildlife(n: Node) -> Node:
+	if n == null:
+		return null
+	if n is WildlifeManager:
+		return n
+	for child in n.get_children():
+		var found := _search_wildlife(child)
+		if found != null:
+			return found
+	return null
 
 
 func _resolve_crowd() -> Node:

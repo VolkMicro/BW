@@ -138,10 +138,10 @@ script = ExtResource("6")
 terrain_path = NodePath("../Island")
 avatar_path = NodePath("../Avatar")
 hand_path = NodePath("../Hand")
-spawn_radius = 105.0
-rimefleece_count = 10
-snagbill_count = 5
-thawjaw_count = 1
+spawn_radius = 520.0
+rimefleece_count = 48
+snagbill_count = 22
+thawjaw_count = 4
 
 [node name="Avatar" parent="." instance=ExtResource("11")]
 show_debug_label = false
