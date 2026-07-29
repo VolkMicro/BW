@@ -429,14 +429,35 @@ func build_mesh() -> ArrayMesh:
 			var i1 := i0 + 1
 			var i2 := i0 + res
 			var i3 := i2 + 1
-			# Winding chosen so cross(v1-v0, v2-v0) points +Y, matching the
-			# computed up-facing normals, so cull_back keeps the topside.
+			# WINDING — this was inverted, and it is the root cause of a very
+			# long chain of symptoms. The original comment here claimed the
+			# order below made cross(v1-v0, v2-v0) point +Y "so cull_back keeps
+			# the topside". The geometric normal did come out +Y, but Godot
+			# decides facing from the winding as projected on screen, not from
+			# that cross product, and by that rule the island's TOP faces were
+			# back-facing. Consequences, in the order they were (mis)diagnosed:
+			#
+			#   * with cull_back, the top of the island was simply not drawn —
+			#     what looked like a pale flat plateau was the SKY and the
+			#     ocean seen straight through the terrain. Confirmed by
+			#     measurement: the "island top" sampled (102,115,126) against a
+			#     sky of (108,121,134). Forcing the terrain shader's ALBEDO to
+			#     pure green changed that region by ~1/255, because no terrain
+			#     was being drawn there at all.
+			#   * an earlier pass "fixed" holes by switching the shader to
+			#     cull_disabled, which drew the underside instead — Godot flips
+			#     the shading normal on a back face, so the island rendered as
+			#     if lit from below: flat, dark, and unresponsive to the sun.
+			#
+			# Both of those were treated as lighting or colour problems for
+			# days. They were one inverted index order. Reversed here, so the
+			# top faces are front-facing and cull_back is correct.
 			indices[t] = i0; t += 1
-			indices[t] = i2; t += 1
-			indices[t] = i1; t += 1
 			indices[t] = i1; t += 1
 			indices[t] = i2; t += 1
+			indices[t] = i1; t += 1
 			indices[t] = i3; t += 1
+			indices[t] = i2; t += 1
 
 	var arrays := []
 	arrays.resize(Mesh.ARRAY_MAX)

@@ -36,16 +36,20 @@ sky = SubResource("Sky_1")
 ; the moment SDFGI was disabled for integrated GPUs this became the reason
 ; the island rendered almost black.
 ambient_light_source = 2
-ambient_light_color = Color(0.62, 0.66, 0.70, 1)
+; Neutral-warm, not sky-blue. With SDFGI off this is the ONLY fill light,
+; so its hue lands on every shadowed surface in the scene. A blue fill on
+; top of a blue-grey sea read as "everything is the same cold grey", which
+; is the opposite of the value/hue separation a god-view needs.
+ambient_light_color = Color(0.70, 0.69, 0.63, 1)
 ; Bumped from 1.0: with sdfgi_enabled=false (see the perf note below),
 ; there is no dynamic bounce light filling in shadowed/underside surfaces
 ; any more — sky-driven ambient is now the only fill light, so it needs to
 ; carry more of that load or the world reads flat/dark. Tune down if a
 ; real low-end run shows it blowing out highlights instead.
-ambient_light_energy = 0.25
+ambient_light_energy = 0.38
 reflected_light_source = 2
 tonemap_mode = 3
-tonemap_exposure = 0.32
+tonemap_exposure = 0.52
 tonemap_white = 6.0
 ; Glow is a mip-chain of downsample+blur+upsample passes over the whole 3D
 ; buffer, every frame. It is genuinely cheap on a discrete GPU and genuinely

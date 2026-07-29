@@ -45,7 +45,16 @@ const GROUP_NAME := &"ocean_surface"
 ## wind-chop waves in GerstnerWaveSet.default_ocean() (which is exactly why
 ## low_spec_wave_count drops them), but ample for the 15-42 m swell that is
 ## all a god-view camera can actually resolve.
-@export var low_spec_subdivisions: int = 64
+## Raised from 64. At the shipping 2400 m plane, 64 subdivisions meant 37 m
+## between ocean vertices — coarser than a third of the island — so the
+## per-vertex "is there land under me" mask (_bake_shore_mask) could not
+## resolve the island at all: only 32 of 4356 vertices came out dry and only
+## 44 triangles could be dropped, leaving the water sheeted across the whole
+## interior. 160 gives ~15 m spacing, fine enough to actually cut the island
+## out. The extra vertices are a startup cost (one sample_height per vertex,
+## once) plus vertex-shader work on a mesh that is still smaller than the
+## terrain's own.
+@export var low_spec_subdivisions: int = 160
 ## How many of the wave set's waves are sent to the GPU on the low-spec
 ## path (longest-wavelength first, i.e. the order they are authored in).
 ## The rest are sent as inert zero-amplitude entries, which the shader's
