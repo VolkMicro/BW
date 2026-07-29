@@ -336,15 +336,67 @@ func _read_shader_source() -> String:
 		return ""
 	return "\n".join(out)
 
+## The mesh cannot represent a wave shorter than about four of its own quads.
+## Below that the vertex program samples the wave at fewer points than it has
+## crests, and what reaches the screen is not a wave at all — it is the sample
+## grid, which is why the open sea read as a regular checkerboard of light and
+## dark blocks in every screenshot of the 1200 m island.
+##
+## Nothing was wrong with the waves. The ocean plane grew to 5200 m to hide
+## the world edge while its subdivision stayed at 160, which is 32.5 m per
+## quad against a 42 m swell: 1.3 samples per wavelength. This is the same
+## undersampling that shredded the terrain — see island_generator.gd.
+const MIN_SAMPLES_PER_WAVELENGTH := 4.0
+
+## Metres per mesh quad. The number every wavelength here has to clear.
+func quad_size() -> float:
+	return maxf(size.x, size.y) / float(maxi(_effective_subdivisions(), 1))
+
+## How much the wave set has to be stretched for the shortest KEPT wave to be
+## representable. 1.0 when the mesh is already fine enough.
+func _wave_scale() -> float:
+	if wave_set == null or wave_set.waves.is_empty():
+		return 1.0
+	var keep: int = wave_set.waves.size() if high_quality_water else maxi(low_spec_wave_count, 1)
+	var shortest := INF
+	for i in range(mini(keep, wave_set.waves.size())):
+		shortest = minf(shortest, float(wave_set.waves[i].get("wavelength", 1.0)))
+	if shortest <= 0.0 or is_inf(shortest):
+		return 1.0
+	return maxf(quad_size() * MIN_SAMPLES_PER_WAVELENGTH / shortest, 1.0)
+
 ## Waves actually sent to the GPU. On the low-spec path the tail of the set
-## is zeroed out: at 12.5 m/quad the shortest waves cannot be represented by
-## the mesh at all, so paying for them in the vertex shader buys nothing but
-## aliasing.
+## is zeroed out — those waves cannot be represented by the mesh at all, so
+## paying for them in the vertex shader buys nothing but aliasing — and the
+## waves that remain are stretched until the mesh can carry them.
+##
+## Stretching, not dropping, because an ocean with no waves left reads as a
+## sheet of plastic.
+##
+## AMPLITUDE IS DELIBERATELY LEFT ALONE. The first attempt scaled it with the
+## wavelength to hold steepness constant, which is the textbook thing to do
+## and was wrong here: a 3.1x stretch turned a 1.1 m swell into a 3.4 m one
+## that climbed over the beaches and painted the coast with foam. Height is
+## set by how the sea should LOOK at this scale, not by the mesh; only the
+## wavelength has to answer to the mesh. Steepness comes down by the same
+## factor instead, which keeps the crests from pinching now that they are
+## three times longer.
 func _push_wave_uniforms() -> void:
 	if _material == null or wave_set == null:
 		return
 	var dirs: Array = wave_set.to_shader_dir_len_steep()
 	var amps: Array = wave_set.to_shader_amp_speed()
+	var scale := _wave_scale()
+	if scale > 1.0:
+		for i in range(dirs.size()):
+			# vec4(dir.x, dir.y, wavelength, steepness) — stretch wavelength.
+			var d: Vector4 = dirs[i]
+			dirs[i] = Vector4(d.x, d.y, d.z * scale, d.w / scale)
+			# vec2(amplitude, speed). Amplitude unchanged (see above); speed by
+			# the square root of the stretch, which is how real deep-water
+			# waves scale and keeps long swell from looking hurried.
+			var a: Vector2 = amps[i]
+			amps[i] = Vector2(a.x, a.y * sqrt(scale))
 	if not high_quality_water:
 		var keep: int = maxi(low_spec_wave_count, 1)
 		for i in range(amps.size()):
@@ -352,6 +404,19 @@ func _push_wave_uniforms() -> void:
 				amps[i] = Vector2.ZERO
 	_material.set_shader_parameter("wave_dir_len_steep", dirs)
 	_material.set_shader_parameter("wave_amp_speed", amps)
+
+	# WHITECAPS BELONG TO CHOP, NOT TO SWELL.
+	#
+	# Crest foam keys off how high a vertex sits relative to
+	# `crest_reference_height`, which is fine for the short steep waves it was
+	# written for. Stretching the wavelengths to fit the mesh makes every crest
+	# broad and gentle, and the same threshold then paints half the open sea
+	# white — which is what the first attempt at this actually did.
+	#
+	# So the threshold rises with the stretch: the gentler the sea has been
+	# made, the closer to the very top of a wave you have to be to break.
+	_material.set_shader_parameter("foam_crest_threshold",
+		clampf(0.6 + (scale - 1.0) * 0.14, 0.6, 0.96))
 
 ## World-space wave height (meters) at an XZ position — `world_pos.y` is
 ## ignored on input. For buoyancy: add this to your floating object's rest

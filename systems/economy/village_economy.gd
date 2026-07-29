@@ -124,10 +124,22 @@ func _ready() -> void:
 		_on_village_registered(village)
 
 
+## A village that has been standing for generations does not start the game
+## with an empty larder. Without this the island opens on "15 hungry,
+## 15 out of firewood" and every settlement bleeds devotion through the first
+## minute, before the player has done anything at all — a famine as the
+## opening state, caused by bookkeeping rather than by anything in the world.
+const STARTING_STORE_FRACTION: float = 0.55
+
 func _on_village_registered(village: Village) -> void:
 	if not _queues.has(village.id):
 		_queues[village.id] = []
+	var fresh := not village.has_meta(Stockpile.META_KEY)
 	Stockpile.ensure(village)
+	if fresh:
+		for resource in [&"food", &"wood", &"stone"]:
+			Stockpile.add(village, resource,
+				Stockpile.capacity(village, resource) * STARTING_STORE_FRACTION)
 	_last_known_devotion[village.id] = village.devotion
 
 
