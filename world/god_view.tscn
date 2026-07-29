@@ -40,21 +40,30 @@ shadow_enabled = true
 directional_shadow_mode = 0
 
 [node name="GodViewMarker" type="Marker3D" parent="."]
-transform = Transform3D(1, 0, 0, 0, 0.87, 0.5, 0, -0.5, 0.87, 0, 95, 165)
+transform = Transform3D(1, 0, 0, 0, 0.87, 0.5, 0, -0.5, 0.87, 0, 300, 520)
 
 [node name="CameraRig" parent="." instance=ExtResource("7")]
 
 [node name="Island" type="Node3D" parent="."]
 script = ExtResource("3")
 island_seed = 1
-size_meters = 320.0
-resolution = 161
-max_height = 58.0
+size_meters = 1200.0
+resolution = 301
+max_height = 120.0
 sea_level = 0.0
 
 [node name="TerrainScatter" type="Node3D" parent="."]
 script = ExtResource("21")
 terrain_path = NodePath("../Island")
+grass_count = 26000
+tree_count = 5200
+rock_count = 2600
+grass_visibility_end = 260.0
+tree_visibility_end = 900.0
+rock_visibility_end = 520.0
+grass_chunk_divisions = 8
+tree_chunk_divisions = 5
+rock_chunk_divisions = 5
 village_anchor_paths = [NodePath("../Villages/FenraytVillage"), NodePath("../Villages/SankilnVillage"), NodePath("../Villages/RaimbornVillage")]
 
 [node name="VillageBuildings" type="Node3D" parent="."]
@@ -71,13 +80,13 @@ terrain_path = NodePath("../Island")
 
 [node name="OceanSurface" type="MeshInstance3D" parent="."]
 script = ExtResource("4")
-size = Vector2(2400, 2400)
+size = Vector2(5200, 5200)
 subdivisions = 112
 
 [node name="Villages" type="Node3D" parent="."]
 
 [node name="FenraytVillage" type="Node3D" parent="Villages"]
-position = Vector3(-70, 0, -60)
+position = Vector3(-250, 0, -210)
 
 [node name="Sanctum" parent="Villages/FenraytVillage" instance=ExtResource("8")]
 village_id = &"isle_fenrayt_hollow"
@@ -91,7 +100,7 @@ village_id = &"isle_fenrayt_hollow"
 [node name="Villagers" type="Node3D" parent="Villages/FenraytVillage"]
 
 [node name="SankilnVillage" type="Node3D" parent="Villages"]
-position = Vector3(75, 0, -50)
+position = Vector3(260, 0, -170)
 
 [node name="Sanctum" parent="Villages/SankilnVillage" instance=ExtResource("8")]
 village_id = &"isle_sankiln_terrace"
@@ -105,7 +114,7 @@ village_id = &"isle_sankiln_terrace"
 [node name="Villagers" type="Node3D" parent="Villages/SankilnVillage"]
 
 [node name="RaimbornVillage" type="Node3D" parent="Villages"]
-position = Vector3(-10, 0, 85)
+position = Vector3(-40, 0, 300)
 
 [node name="Sanctum" parent="Villages/RaimbornVillage" instance=ExtResource("8")]
 village_id = &"isle_raimborn_shore"

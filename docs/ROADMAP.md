@@ -51,10 +51,26 @@ before inventing any name.
 
 *Update this section every commit.*
 
-**Status: Phase 1 in progress. 1a (villagers off the scene graph) now WORKS.
-1c (island to ~1200 m) is the next blocker.**
+**Status: Phase 1 in progress. 1a WORKS. 1c (island to ~1200 m) is DONE —
+the island is now 1200 m at resolution 301, cached to disk, with scatter
+chunked for per-region culling. Next is 15 villages, then Phase 2.**
 
 Done since the roadmap was written:
+- **The island is 1200 m across** (was 320 m), `max_height` 120 m,
+  ocean plane 5200 m so no world edge is visible. This is the scale the
+  15-village target needs.
+- **Generation is cached to disk.** `island_generator.gd` hashes the 26
+  parameters that affect the heightmap into a key under
+  `user://terrain_cache`. Measured at 1200 m / 301 / 60000 droplets:
+  first run 2705 ms, cached run 538 ms. Change any generation parameter
+  and the key changes, so there is no stale-cache trap — you never need
+  to clear it by hand.
+- **Scatter is chunked.** Grass, trees and rocks each split into an NxN
+  grid of MultiMeshInstance3Ds (8x8 grass, 5x5 trees, 5x5 rocks) so the
+  engine can cull whole regions by distance. On a 320 m island one
+  MultiMesh per kind was fine; at 1200 m it meant drawing the far side of
+  the island every frame. Counts scaled with area: 26000 grass, 5200
+  trees, 2600 rocks.
 - Island is no longer a dome: lobed elliptical falloff centres plus a
   domain-warped coastline, so each seed is a different landmass with
   headlands and bays (§7 items 1 and 2). Items 3 (inland lakes) and 4
