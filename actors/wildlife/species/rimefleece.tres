@@ -1,0 +1,44 @@
+[gd_resource type="Resource" script_class="WildlifeSpecies" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://actors/wildlife/wildlife_species.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+id = &"rimefleece"
+display_name = "Rimefleece"
+one_line = "A coat that looks frosted even in high summer, and exactly two ideas: grass, and the herd."
+color_primary = Color(0.741, 0.757, 0.729, 1)
+color_accent = Color(0.259, 0.227, 0.196, 1)
+body_scale = 1.0
+label_height = 1.5
+collider_radius = 0.42
+collider_height = 1.05
+walk_speed = 1.5
+flee_speed = 4.6
+hunt_speed = 0.0
+turn_rate = 3.5
+flee_radius = 11.0
+calm_radius = 17.0
+calm_seconds = 4.5
+flee_step = 15.0
+home_range_radius = 28.0
+wander_step = 8.0
+wander_min_seconds = 3.0
+wander_max_seconds = 7.0
+graze_min_seconds = 6.0
+graze_max_seconds = 15.0
+is_herd = true
+cohesion_radius = 9.0
+cohesion_weight = 0.55
+is_predator = false
+hunts = PackedStringArray()
+hunt_radius = 0.0
+kill_range = 0.0
+seconds_to_hunger = 0.0
+feed_seconds = 0.0
+is_prey = true
+scavenges = false
+scavenge_radius = 0.0
+scavenge_seconds = 0.0
+think_interval = 0.4
+min_ground_height = 1.4

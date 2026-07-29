@@ -9,7 +9,7 @@ config_version=5
 config/name="TITHE & TERROR"
 config/description="A god-sim / life-sim hybrid over the Ninefold Sea. Unnamed god, one rival, two bickering spirits, and a beast that learns."
 run/main_scene="res://world/god_view.tscn"
-config/features=PackedStringArray("4.3", "Forward Plus")
+config/features=PackedStringArray("4.3", "Mobile")
 boot_splash/bg_color=Color(0.043, 0.047, 0.058, 1)
 config/icon="res://icon.svg"
 
@@ -31,35 +31,60 @@ window/vsync/vsync_mode=1
 
 [rendering]
 
-renderer/rendering_method="forward_plus"
+; =====================================================================
+; ROUND THREE: low-spec pass. Full reasoning, including everything that
+; could NOT be verified from a sandbox with no GPU, is in
+; docs/systems/performance_lowspec.md. Rounds one and two are recorded in
+; docs/systems/performance_notes.md.
+;
+; ---> IF THE GAME COMES UP BLACK, BROKEN, OR REFUSES TO START, THE FIRST
+;      THING TO TRY IS CHANGING THE LINE BELOW BACK TO:
+;          renderer/rendering_method="forward_plus"
+;      and also setting config/features back to
+;          PackedStringArray("4.3", "Forward Plus")
+;      That is the entire revert. Everything else in this file is a
+;      quality knob that cannot break rendering, only make it uglier.
+;
+; Why Mobile: it is Godot's own low-spec rendering method — a single-pass
+; forward renderer with no clustered light-culling compute pass, fewer and
+; smaller intermediate render targets, and reduced-precision math. Round
+; two deferred this switch over custom-shader compatibility risk. That risk
+; was actually investigated this round rather than assumed (see the doc):
+; the only shader features Godot gates to Forward+ are subsurface
+; scattering, light transmittance and hint_normal_roughness_texture, none
+; of which any shader in this repo uses. world/ocean/ocean.gdshader's
+; screen/depth-texture reads — the specific worry round two named — are now
+; compiled out entirely on the default (low-spec) water path, so the
+; shipping scene reads neither buffer at all. This has NOT been run on a
+; GPU; see the doc.
+renderer/rendering_method="mobile"
 renderer/rendering_method.mobile="mobile"
 environment/defaults/default_environment="res://environment/world_environment.tres"
-; Performance note (see docs/systems/engineering.md and the perf incident
-; it was written to anticipate): this whole [rendering] block was tuned as
-; a visual-quality ceiling in a sandbox with no GPU to ever measure it
-; against, per that doc's own "design target, not yet measured" framing.
-; The first real-hardware run came back at ~1 fps. These settings are the
-; "practical levers" that same doc already named, pulled in the order it
-; specified (resolution scale, then GI, then fog, then shadows) rather
-; than as a guess — cutting draw distance/crowd counts was deliberately
-; left as the last resort, per that doc, and isn't needed yet.
-; Confirmed hardware for the report this second round of cuts responds to:
-; integrated Intel graphics only, no discrete GPU. SDFGI/volumetric fog
-; were disabled outright in environment/world_environment.tres (quality
-; tuning wasn't enough); the settings below push the remaining Forward+
-; cost down further for the same reason. Still on the Forward+ renderer,
-; not the Mobile one — switching renderer methods would touch custom
-; shader compatibility (screen_texture/depth_texture reads in
-; world/ocean/ocean.gdshader) this sandbox has no way to verify without
-; real hardware, so that's flagged as a bigger, riskier follow-up rather
-; than attempted blind.
 anti_aliasing/quality/msaa_3d=0
 anti_aliasing/quality/screen_space_aa=1
-anti_aliasing/quality/use_taa=true
-occlusion_culling/use_occlusion_culling=true
+; TAA was previously true. It was ALSO silently inert, because Godot
+; disables TAA internally whenever FSR2 is the 3D scaling mode ("FSR 2 is
+; not compatible with TAA. Disabling TAA internally."), which it was. Now
+; that FSR2 is gone it would actually switch on — and TAA means per-frame
+; motion vectors plus a full-resolution history resolve, which is not a
+; cost this machine can absorb. It is also Forward+-only. Explicitly off.
+anti_aliasing/quality/use_taa=false
+; There is not a single OccluderInstance3D anywhere in this project, so
+; occlusion culling has nothing to occlude with — it was paying for the
+; software-rasterizer setup every frame and culling nothing.
+occlusion_culling/use_occlusion_culling=false
 lights_and_shadows/positional_shadow/soft_shadow_filter_quality=0
 lights_and_shadows/directional_shadow/soft_shadow_filter_quality=0
 lights_and_shadows/directional_shadow/size=1024
+; 16-bit shadow depth: half the bandwidth on every shadow-map write and
+; every shadow lookup. On a GPU sharing system memory with the CPU that is
+; worth more than the resolution itself. Acceptable here because the sun is
+; the only shadow caster and its shadow range is short.
+lights_and_shadows/directional_shadow/16_bits=true
+; No positional (omni/spot) light in this project casts shadows, but the
+; default 4096x4096 positional shadow atlas gets allocated regardless.
+lights_and_shadows/positional_shadow/atlas_size=1024
+lights_and_shadows/positional_shadow/atlas_16_bits=true
 global_illumination/gi/use_half_resolution=true
 environment/ssao/quality=0
 environment/ssil/quality=0
@@ -67,7 +92,27 @@ environment/glow/upscale_mode=1
 environment/volumetric_fog/use_filter=0
 textures/decals/filter=3
 textures/light_projectors/filter=3
-scaling_3d/mode=2
+; Anisotropic filtering makes a single texture fetch touch up to 16x as
+; many texels, and it does so exactly at the grazing viewing angles a
+; god-view camera looks at terrain from. world/terrain/terrain_triplanar.gdshader
+; is the heaviest texture consumer in the project; disabling anisotropy
+; globally is the cheapest way to stop paying for it. Distant terrain gets
+; blurrier — that is the trade.
+textures/default_filters/anisotropic_filtering_level=0
+; The ocean is now an opaque surface (see the render_mode note in
+; world/ocean/ocean.gdshader), which means a depth prepass can reject the
+; terrain and geometry behind it before their fragment shaders ever run.
+; Explicit rather than relying on the default.
+driver/depth_prepass/enable=true
+; Bilinear, NOT FSR2. FSR2 is a seven-pass temporal upscaler that Godot's
+; own project-setting hint labels "Slow"; it needs motion vectors, a
+; history buffer and a lock/reproject/accumulate chain, all at OUTPUT
+; resolution. It is also Forward+-only, so it could not be used on the
+; Mobile renderer anyway. Bilinear is one stretched blit. On integrated
+; graphics this swap alone is expected to be one of the two largest wins in
+; this whole pass. environment/graphics_preset.gd restores FSR2 at the HIGH
+; preset when the renderer is Forward+.
+scaling_3d/mode=0
 scaling_3d/scale=0.5
 scaling_3d/fsr_sharpness=0.2
 

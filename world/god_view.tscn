@@ -1,4 +1,4 @@
-[gd_scene load_steps=18 format=3]
+[gd_scene load_steps=21 format=3]
 
 [ext_resource type="Environment" path="res://environment/world_environment.tres" id="1"]
 [ext_resource type="Script" path="res://world/god_view.gd" id="2"]
@@ -17,6 +17,9 @@
 [ext_resource type="PackedScene" path="res://campaign/campaign_manager.tscn" id="15"]
 [ext_resource type="PackedScene" path="res://environment/naklon_environment_driver.tscn" id="16"]
 [ext_resource type="PackedScene" path="res://environment/weather_environment_driver.tscn" id="17"]
+[ext_resource type="PackedScene" path="res://environment/graphics_preset.tscn" id="18"]
+[ext_resource type="PackedScene" path="res://actors/wildlife/wildlife_manager.tscn" id="19"]
+[ext_resource type="Script" path="res://ui/voice_log.gd" id="20"]
 
 [node name="GodView" type="Node3D"]
 script = ExtResource("2")
@@ -29,6 +32,7 @@ transform = Transform3D(0.72, -0.5, 0.48, 0, 0.69, 0.72, -0.69, -0.52, 0.5, 0, 4
 light_energy = 1.4
 light_angular_distance = 0.6
 shadow_enabled = true
+directional_shadow_mode = 0
 
 [node name="GodViewMarker" type="Marker3D" parent="."]
 transform = Transform3D(1, 0, 0, 0, 0.82, 0.57, 0, -0.57, 0.82, 0, 130, 220)
@@ -46,7 +50,7 @@ sea_level = 0.0
 [node name="OceanSurface" type="MeshInstance3D" parent="."]
 script = ExtResource("4")
 size = Vector2(800, 800)
-subdivisions = 160
+subdivisions = 64
 
 [node name="Villages" type="Node3D" parent="."]
 
@@ -95,6 +99,15 @@ village_id = &"isle_raimborn_shore"
 [node name="VillageEconomy" type="Node" parent="."]
 script = ExtResource("6")
 
+[node name="WildlifeManager" parent="." instance=ExtResource("19")]
+terrain_path = NodePath("../Island")
+avatar_path = NodePath("../Avatar")
+hand_path = NodePath("../Hand")
+spawn_radius = 105.0
+rimefleece_count = 10
+snagbill_count = 5
+thawjaw_count = 1
+
 [node name="Avatar" parent="." instance=ExtResource("11")]
 show_debug_label = false
 
@@ -110,17 +123,95 @@ show_debug_label = false
 
 [node name="WeatherEnvironmentDriver" parent="." instance=ExtResource("17")]
 
+[node name="GraphicsPreset" parent="." instance=ExtResource("18")]
+
 [node name="SanctumInteraction" parent="." instance=ExtResource("10")]
 sanctum_path = NodePath("Villages/FenraytVillage/Sanctum")
 interior_dressing_path = NodePath("Villages/FenraytVillage/Sanctum/InteriorAnchor/InteriorDressing")
 
 [node name="UI" type="CanvasLayer" parent="."]
 
+[node name="ObjectiveLabel" type="Label" parent="UI"]
+offset_left = 24.0
+offset_top = 20.0
+offset_right = 1100.0
+offset_bottom = 170.0
+theme_override_colors/font_color = Color(0.96, 0.94, 0.88, 1)
+theme_override_colors/font_outline_color = Color(0.04, 0.04, 0.06, 0.85)
+theme_override_constants/outline_size = 5
+theme_override_constants/line_spacing = 4
+theme_override_font_sizes/font_size = 20
+autowrap_mode = 3
+text = "Yours: 0 of 3 villages."
+
+[node name="VoiceLog" type="RichTextLabel" parent="UI"]
+anchor_top = 1.0
+anchor_bottom = 1.0
+offset_left = 24.0
+offset_top = -470.0
+offset_right = 840.0
+offset_bottom = -120.0
+grow_vertical = 0
+mouse_filter = 2
+theme_override_colors/default_color = Color(0.94, 0.93, 0.9, 1)
+theme_override_colors/font_outline_color = Color(0.04, 0.04, 0.06, 0.85)
+theme_override_constants/outline_size = 5
+theme_override_constants/line_separation = 6
+theme_override_font_sizes/normal_font_size = 17
+bbcode_enabled = true
+scroll_active = false
+script = ExtResource("20")
+
+[node name="RitesLabel" type="Label" parent="UI"]
+visible = false
+anchor_left = 1.0
+anchor_right = 1.0
+offset_left = -560.0
+offset_top = 20.0
+offset_right = -24.0
+offset_bottom = 700.0
+grow_horizontal = 0
+theme_override_colors/font_color = Color(0.9, 0.91, 0.95, 1)
+theme_override_colors/font_outline_color = Color(0.04, 0.04, 0.06, 0.85)
+theme_override_constants/outline_size = 5
+theme_override_font_sizes/font_size = 16
+autowrap_mode = 3
+text = "RITES YOU KNOW"
+
+[node name="EndCard" type="Label" parent="UI"]
+visible = false
+anchor_left = 0.5
+anchor_top = 0.5
+anchor_right = 0.5
+anchor_bottom = 0.5
+offset_left = -560.0
+offset_top = -240.0
+offset_right = 560.0
+offset_bottom = 240.0
+grow_horizontal = 2
+grow_vertical = 2
+theme_override_colors/font_color = Color(0.98, 0.96, 0.9, 1)
+theme_override_colors/font_outline_color = Color(0.03, 0.03, 0.05, 0.95)
+theme_override_constants/outline_size = 8
+theme_override_constants/line_spacing = 6
+theme_override_font_sizes/font_size = 26
+horizontal_alignment = 1
+vertical_alignment = 1
+autowrap_mode = 3
+
 [node name="HelpLabel" type="Label" parent="UI"]
-offset_left = 20.0
-offset_top = 970.0
-offset_right = 1850.0
-offset_bottom = 1060.0
-text = "1: god view   2: walk into Fenrayt Hollow's Sanctum (arrows to walk once inside, Enter to interact)
-Mouse: aim the Hand   Hold Left Click: grip/throw   Hold Right Click + drag: draw a sigil
-[ / ]: nudge Naklon toward Mercy / Cruelty   F / G: praise / chastise the Avatar   L: force Louhi to re-evaluate now"
+anchor_top = 1.0
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = 24.0
+offset_top = -108.0
+offset_right = -24.0
+offset_bottom = -14.0
+grow_vertical = 0
+theme_override_colors/font_color = Color(0.85, 0.86, 0.9, 1)
+theme_override_colors/font_outline_color = Color(0.04, 0.04, 0.06, 0.8)
+theme_override_constants/outline_size = 4
+theme_override_font_sizes/font_size = 15
+text = "Mouse: aim the Hand   Hold Left Click: grip/throw   Hold Right Click + drag: draw a rite over a village
+Arrows: pan   Scroll: zoom   Middle-drag: orbit   3: rites you know   1: god view   2: walk into Fenrayt Hollow's Sanctum (Enter to interact)
+[ / ]: nudge Naklon toward Mercy / Cruelty   F / G: praise / chastise the Avatar   L: force Louhi to re-evaluate now   P: graphics preset"

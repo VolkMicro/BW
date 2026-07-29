@@ -5,6 +5,28 @@ extends Node3D
 ## standalone `*_demo.tscn`. See docs/systems/integration.md for the full
 ## file:line map of what's wired to what and what's still standalone.
 ##
+## GAMEPLAY-LOOP PASS (second pass over this file) — the verdict on the
+## previous build was, bluntly, "there is no gameplay": every system ran,
+## and none of them added up to something a player could win, lose, or even
+## understand. This pass does not add a system. It closes the circuit
+## between the ones that already exist:
+##
+##   * rites now DO something (nothing in the shipped scene called
+##     Reach.convert_via_help/terror — the only callers in the whole repo
+##     were the skirmish demo and the netcode, so a single-player village
+##     could never be converted by anything the player did);
+##   * the Two Voices are now actually shown (nothing in god_view.tscn was
+##     connected to Voices.remark — 474 authored lines went to nobody);
+##   * there is a visible objective, driven by CampaignManager's real quest
+##     signals and by real village state;
+##   * there is a win state, a lose state, and a partial ("divided") state,
+##     so the island ends instead of running forever;
+##   * the Avatar can actually grow (nothing ever called feed_devotion(),
+##     and no context tag was ever open, so praise/chastise were inert).
+##
+## The full step-by-step trace, including the places the loop is still thin,
+## is in docs/systems/gameplay_loop.md.
+##
 ## Bootstrap shape follows the pattern every existing demo already uses
 ## (world/sanctum/sanctum_demo.gd, actors/villagers/village_demo.gd,
 ## world/sanctum_interior/sanctum_interior_demo.gd): register real Village
@@ -57,6 +79,120 @@ const VILLAGE_DEFS: Array[Dictionary] = [
 ## into — arbitrary pick (the first culture), see docs/systems/integration.md.
 const WALKABLE_SANCTUM_PATH := "Villages/FenraytVillage/Sanctum"
 
+# ---------------------------------------------------------------------------
+# THE LOOP — rite → conversion.
+#
+# `systems/faith/reach.gd` has had convert_via_help()/convert_via_terror()
+# since package J landed, with tuned per-method fatigue and per-method
+# ceilings. Nothing in the single-player scene ever called either of them
+# (verified by grep: the only callers anywhere were
+# modes/skirmish/skirmish_scenario_demo.gd:91 and net/network_manager.gd:333,
+# neither of which runs here). So the player's only real verb — draw a sigil
+# — landed on nothing at all. These two tables are that missing edge.
+#
+# The `amount` numbers are "how much help/terror", NOT a faith delta —
+# reach.gd multiplies by HELP_GAIN_PER_AMOUNT (0.05) / TERROR_GAIN_PER_AMOUNT
+# (0.07), then by this village+method's remaining effectiveness (fatigue
+# rises 0.28 per use and decays over ~65s), then by the headroom left under
+# that method's ceiling.
+#
+# Tuned, not guessed: with a player casting roughly every five seconds the
+# help pool settles at about 27% effectiveness, so a `harvest` (6.0) is worth
+# +0.48·(1−faith) on the first cast and about +0.16·(1−faith) at that
+# equilibrium. A village starting at 0.20 reaches the tipping point below in
+# about fifteen casts; one starting at 0.55 in about nine. Walking away for a
+# minute lets the fatigue decay all the way back, which makes patience a real
+# and rewarded tactic rather than a phrase in a design doc.
+#
+# Split by meaning, not by convenience: every rite that GIVES a village
+# something is help; every rite that happens TO a village is terror. Terror
+# is capped at 0.85 by reach.gd — below the tipping point — so a player who
+# only ever throws lightning hits a wall and has to change tactics. The
+# objective line says so out loud when it happens (_build_objective_text).
+# ---------------------------------------------------------------------------
+const HELP_RITE_AMOUNT: Dictionary = {
+	&"harvest": 6.0,    # food out of nothing
+	&"rain_call": 5.4,  # water for the fields
+	&"repair": 5.0,     # mend what broke
+	&"ward": 4.4,       # protection, the first rite anyone asks an unproven god for
+	&"lumber": 4.4,     # timber
+	&"path_gate": 3.8,  # a way through
+}
+const TERROR_RITE_AMOUNT: Dictionary = {
+	&"fire_arrow": 3.6,
+	&"lightning": 4.4,
+	&"storm": 5.0,
+}
+
+## THE ONE PLACE THIS FILE OVERRIDES ANOTHER PACKAGE'S CURVE, stated openly.
+##
+## `Village.is_fully_converted()` (core/village.gd:36) requires
+## `faith_fraction >= 0.999`. `Reach._grow_faith()` (systems/faith/reach.gd:131)
+## multiplies every gain by the remaining headroom under the ceiling, so the
+## gain is proportional to (1 − faith): the curve is asymptotic and **0.999
+## is mathematically unreachable**. Verified by running it, not by reading
+## it — 400 consecutive `harvest` rites on one village took it from 0.55 to
+## 0.783 and it was still climbing by thousandths. Left alone, the central
+## verb of the game can never complete, which is a large part of why the
+## previous build had no loop.
+##
+## The honest fixes were (a) edit reach.gd's curve, which belongs to package J
+## and is used by the netcode's mirrored copy too, or (b) decide at the
+## integration layer when "convinced enough" becomes "converted". This is (b):
+## once nine villagers in ten pray to you, the last one follows the village.
+## Deliberately set ABOVE reach.gd's TERROR_CEILING (0.85) so that terror
+## alone still cannot take a village — that design rule survives intact.
+const CONVERSION_TIPPING_POINT := 0.90
+
+## Fraction of every point of village devotion that also feeds the Avatar.
+## Villagers generate devotion for real (actors/villagers/villager.gd:860 for
+## prayer, :984 for ambient labour) and GameState.devotion_changed has always
+## been emitted — but `Avatar.feed_devotion()` had no caller anywhere outside
+## actors/avatar/avatar_demo.gd, so the Avatar could never leave stage "Cub"
+## no matter how long the game ran.
+##
+## Measured, not estimated (two headless runs of this scene, 30 s and 90 s of
+## real game time at boot population): the three villages together generate
+## roughly 0.9-1.4 devotion/second from prayer and ambient labour, varying
+## with how many villagers the Calling Stones currently hold. At 0.35 the
+## Avatar is fed ~0.3-0.5/s, putting "Juvenile" (30 devotion, avatar.gd:84)
+## at 1-2 minutes and "Grown" (120) at 4-7 minutes — one sitting, not
+## instant. The devotion half is only half the gate: both stages also need
+## praise (6 and 16 presses of F), which is the player's own input and cannot
+## be idled through.
+const AVATAR_DEVOTION_SHARE := 0.35
+
+## How often the objective/end-state check runs. Everything in it is a few
+## dozen float ops over three villages; at 1 Hz it is not measurable.
+const SLOW_TICK_SEC := 1.0
+
+## The opening exchange. Authored HERE rather than in
+## systems/voices/voice_lines.gd because that file belongs to package M and
+## has no `game_start` trigger to hang these on; they are pushed straight
+## into the VoiceLog, which renders them identically to a real
+## `Voices.react()` pair. Original writing, checked against
+## docs/audit/respect_audit.md rule 6: the joke is on the god's own
+## self-importance and Hiisi's appetite, never on belief or believers.
+##
+## Content requirement from the brief: no tutorial popups — the player is
+## told what they are, what the verb is, and what winning means, by the two
+## characters who are going to be talking anyway.
+const OPENING_EXCHANGE: Array[Dictionary] = [
+	{"t": 1.5, "speaker": &"domovoi", "text": "You're awake. Three villages on this rock, and not one of them has settled on what you are."},
+	{"t": 6.0, "speaker": &"hiisi", "text": "Two of them have barely heard of you at all. I say we introduce ourselves. Loudly."},
+	{"t": 11.0, "speaker": &"domovoi", "text": "Quietly. Hold the right mouse button and drag a shape over a village — that is a rite. They will feel it. Then they will argue about it for a week."},
+	{"t": 16.5, "speaker": &"hiisi", "text": "And when all three say your name without being asked, the island is yours and I am going to sleep for a year."},
+]
+
+## Two teaching nudges, fired only if the player has not discovered the thing
+## on their own. This is the "teach through the Voices and through your own
+## mistakes" rule from the brief — a hint that never appears for a player who
+## already worked it out.
+const NUDGE_CAMERA_AFTER := 14.0
+const NUDGE_RITE_AFTER := 26.0
+
+enum Ending { NONE, VICTORY, DIVIDED, DEFEAT }
+
 @onready var _island: IslandTerrain = $Island
 @onready var _camera_rig: CameraRig = $CameraRig
 @onready var _god_view_marker: Marker3D = $GodViewMarker
@@ -64,15 +200,44 @@ const WALKABLE_SANCTUM_PATH := "Villages/FenraytVillage/Sanctum"
 @onready var _louhi: LouhiDirector = $LouhiDirector
 @onready var _avatar: Avatar = $Avatar
 @onready var _hand: Hand = $Hand
+@onready var _graphics_preset: GraphicsPreset = $GraphicsPreset
 @onready var _help_label: Label = $UI/HelpLabel
+@onready var _objective_label: Label = $UI/ObjectiveLabel
+@onready var _rites_label: Label = $UI/RitesLabel
+@onready var _end_card: Label = $UI/EndCard
+@onready var _voice_log: VoiceLog = $UI/VoiceLog
+
+var _sanctums: Array[Sanctum] = []
+var _last_devotion: Dictionary = {}      # StringName -> float, for the Avatar feed delta
+var _ending: int = Ending.NONE
+var _first_rite_cast: bool = false
+var _camera_moved: bool = false
+var _camera_anchor: Vector3 = Vector3.ZERO
+var _avatar_context: StringName = &""
+var _louhi_note: String = ""
+var _objective_cache: String = ""
+
+var _elapsed: float = 0.0
+var _slow_tick: float = 0.0
+var _opening_index: int = 0
+var _nudged_camera: bool = false
+var _nudged_rite: bool = false
 
 
 func _ready() -> void:
 	_place_villages_and_villagers()
 	_place_avatar_and_hand()
 	_wire_campaign_and_louhi()
+	_wire_gameplay_loop()
 	_camera_rig.frame_god_view(_god_view_marker.global_transform, true)
 	_refresh_help_label()
+	_refresh_rites_label()
+	_refresh_objective()
+	# Every child's _ready() has run by now, including CampaignManager's,
+	# which activates six quests and therefore emitted twelve boot-time
+	# Voices lines nobody should have to read before touching the mouse.
+	# Opening the log here drops exactly those and nothing else.
+	_voice_log.unmute()
 
 
 # ---------------------------------------------------------------------------
@@ -98,6 +263,7 @@ func _place_villages_and_villagers() -> void:
 		v.sanctum_hp = entry.sanctum_hp
 		v.sanctum_hp_max = 100.0
 		GameState.register_village(v)
+		_last_devotion[v.id] = v.devotion
 
 		# Real terrain query (world/terrain/island_terrain.gd:104's own stated
 		# use case: "village placement") rather than a guessed constant Y.
@@ -106,6 +272,10 @@ func _place_villages_and_villagers() -> void:
 		var ring := anchor.get_node_or_null("ReachBorderRing")
 		if ring:
 			ring.terrain = _island
+
+		var sanctum := anchor.get_node_or_null("Sanctum") as Sanctum
+		if sanctum:
+			_sanctums.append(sanctum)
 
 		_spawn_villagers(entry.id, anchor)
 		_spawn_calling_stone(entry.id, anchor)
@@ -154,7 +324,16 @@ func _spawn_calling_stone(village_id: StringName, anchor: Node3D) -> void:
 func _place_avatar_and_hand() -> void:
 	GameState.avatar_species = &"otso"
 	_avatar.set_species(OTSO_SPECIES)
-	var avatar_xz := Vector2(20.0, 15.0)
+	# Moved (was 20,15 — the empty middle of the island) to just outside
+	# Fenrayt Hollow's Reach ring. Reason, stated plainly: `actors/avatar/`
+	# implements a full learning model but NO locomotion — avatar.gd's only
+	# `_physics_process` applies gravity and nothing else, so the Avatar
+	# never walks anywhere on its own. Parked in the middle of nowhere it was
+	# permanently in the `explore_new_place` context and praising it taught it
+	# about scenery. Standing at a village, praise (F) reinforces
+	# `guard_village`, which is a thing a god might actually want a bear to
+	# learn. See _update_avatar_context() and docs/systems/gameplay_loop.md.
+	var avatar_xz := Vector2(-56.0, -50.0)
 	_avatar.position = Vector3(avatar_xz.x, _island.sample_height(avatar_xz) + 1.0, avatar_xz.y)
 
 	var hand_xz := Vector2(18.0, 12.0)
@@ -179,6 +358,454 @@ func _wire_campaign_and_louhi() -> void:
 		func(rite_id: StringName, _confidence: float) -> void:
 			_campaign_manager.notify_rite_cast(rite_id)
 	)
+	# ...and the gameplay half of the same signal, which nothing owned.
+	sigil_caster.rite_cast.connect(_on_rite_cast)
+
+
+# ---------------------------------------------------------------------------
+# THE GAMEPLAY LOOP. Everything below this line is the second pass.
+# ---------------------------------------------------------------------------
+func _wire_gameplay_loop() -> void:
+	GameState.village_converted.connect(_on_village_converted)
+	GameState.village_lost.connect(_on_village_lost)
+	GameState.devotion_changed.connect(_on_devotion_changed)
+	GameState.epithet_earned.connect(_on_epithet_earned)
+
+	_campaign_manager.quest_activated.connect(_on_quest_changed)
+	_campaign_manager.quest_completed.connect(_on_quest_changed)
+	_campaign_manager.scroll_learned.connect(_on_scroll_learned)
+
+	_louhi.sign_occurred.connect(_on_louhi_sign)
+	_louhi.sign_relented.connect(_on_louhi_relented)
+
+	for sanctum in _sanctums:
+		sanctum.sanctum_destroyed.connect(_on_sanctum_destroyed)
+
+
+## One `_process` for the whole loop: a couple of float subtractions and one
+## compare per frame in the steady state, everything real behind either the
+## 1 Hz slow tick or a one-shot flag. Deliberately not four separate Timers.
+func _process(delta: float) -> void:
+	_elapsed += delta
+
+	# Opening exchange — a scheduled list, not a chain of awaits, so it can
+	# never leave a dangling coroutine if the scene is freed mid-line.
+	if _opening_index < OPENING_EXCHANGE.size():
+		var beat: Dictionary = OPENING_EXCHANGE[_opening_index]
+		if _elapsed >= float(beat["t"]):
+			var speaker: StringName = beat["speaker"]
+			_voice_log.push_line(speaker, String(beat["text"]))
+			_opening_index += 1
+
+	_slow_tick -= delta
+	if _slow_tick > 0.0:
+		return
+	_slow_tick = SLOW_TICK_SEC
+	_slow_update()
+
+
+func _slow_update() -> void:
+	_update_camera_discovery()
+	_update_avatar_context()
+	_update_nudges()
+	if _ending == Ending.NONE:
+		_check_end_state()
+	_refresh_objective()
+
+
+# --- teaching without popups ------------------------------------------------
+
+func _update_camera_discovery() -> void:
+	var cam := get_viewport().get_camera_3d()
+	if cam == null:
+		return
+	if _camera_anchor == Vector3.ZERO:
+		_camera_anchor = cam.global_position
+		return
+	if not _camera_moved and cam.global_position.distance_to(_camera_anchor) > 6.0:
+		_camera_moved = true
+
+
+func _update_nudges() -> void:
+	if _ending != Ending.NONE:
+		return
+	if not _nudged_camera and not _camera_moved and _elapsed > NUDGE_CAMERA_AFTER:
+		_nudged_camera = true
+		_voice_log.push_line(&"domovoi",
+			"You are looking at one corner of your own island. Arrow keys move the eye, the wheel brings it down. Nobody is going to do it for you.")
+	if not _nudged_rite and not _first_rite_cast and _elapsed > NUDGE_RITE_AFTER:
+		_nudged_rite = true
+		_voice_log.push_line(&"hiisi",
+			"Still nothing? Right mouse button, drag a circle over a village. A circle. The shape you have been drawing since you were a puddle.")
+
+
+# --- rites actually doing something -----------------------------------------
+
+## Resolves a recognized sigil into a real conversion act on a real village.
+## Target is the village whose Reach circle the Hand is currently over —
+## the same circle world/terrain/reach_border.gd is already drawing on the
+## ground every frame, so "where can I cast" is a thing the player can see
+## rather than a rule they have to be told.
+func _on_rite_cast(rite_id: StringName, confidence: float) -> void:
+	if _ending != Ending.NONE:
+		return
+	var world_pos: Vector3 = _hand.get_target_position()
+	var target: Village = _village_in_reach_of(world_pos)
+
+	if target == null:
+		# Refused: the Hand flashes (actors/hand/hand.gd:194) and the Voices
+		# explain jurisdiction. This is the single most important teaching
+		# moment in the game — it is how a player learns Reach exists.
+		_hand.request_refusal_flash(&"rite_out_of_reach")
+		var nearest: Village = _nearest_village(world_pos)
+		Voices.react(&"offering_out_of_reach", {
+			"village_id": nearest.id if nearest != null else &"",
+			"kind": "rite",
+		})
+		return
+
+	if not _first_rite_cast:
+		_first_rite_cast = true
+		Voices.react(&"first_rite_cast", {"rite_id": rite_id, "village_id": target.id})
+
+	# A one-shot procedural particle burst from systems/sigils/rite_vfx.gd,
+	# which frees itself. This is the only visual confirmation that a rite
+	# landed HERE rather than somewhere else.
+	RiteVFX.spawn(rite_id, world_pos, self)
+
+	# Confidence never drops below the recognizer's 0.75 threshold, so this
+	# is a 0.875..1.0 nudge — a scruffy sigil is worth slightly less, it is
+	# not a punishment.
+	var quality := 0.5 + 0.5 * clampf(confidence, 0.0, 1.0)
+	if HELP_RITE_AMOUNT.has(rite_id):
+		# Fires Voices &"village_helped" and shifts Naklon toward mercy —
+		# both already implemented in systems/faith/reach.gd:146-154.
+		Reach.convert_via_help(target.id, float(HELP_RITE_AMOUNT[rite_id]) * quality)
+	elif TERROR_RITE_AMOUNT.has(rite_id):
+		Reach.convert_via_terror(target.id, float(TERROR_RITE_AMOUNT[rite_id]) * quality)
+	# Any other recognized rite id has no conversion meaning; the VFX and the
+	# campaign's notify_rite_cast() still fire. There are none today — the
+	# two tables cover all nine SigilTemplates ids.
+
+	_maybe_tip_over(target)
+	_refresh_objective()
+
+
+## See CONVERSION_TIPPING_POINT. Emits through GameState.set_faith_fraction()
+## so `village_converted` fires exactly once, through the normal path, and
+## every existing listener (CampaignManager's culture quests, the Reach ring,
+## the Voices) reacts the way it always would.
+func _maybe_tip_over(v: Village) -> void:
+	if v.loyal_to_rival or v.is_fully_converted():
+		return
+	if v.faith_fraction >= CONVERSION_TIPPING_POINT:
+		GameState.set_faith_fraction(v.id, 1.0)
+
+
+func _village_in_reach_of(world_pos: Vector3) -> Village:
+	var flat := Vector3(world_pos.x, 0.0, world_pos.z)
+	var best: Village = null
+	var best_d := INF
+	for value in GameState.villages.values():
+		var v: Village = value
+		if v.loyal_to_rival:
+			continue
+		var origin := Vector3(v.position_on_island.x, 0.0, v.position_on_island.y)
+		var d := origin.distance_to(flat)
+		if d <= Reach.radius_for_village(v.id) and d < best_d:
+			best_d = d
+			best = v
+	return best
+
+
+func _nearest_village(world_pos: Vector3) -> Village:
+	var flat := Vector3(world_pos.x, 0.0, world_pos.z)
+	var best: Village = null
+	var best_d := INF
+	for value in GameState.villages.values():
+		var v: Village = value
+		var origin := Vector3(v.position_on_island.x, 0.0, v.position_on_island.y)
+		var d := origin.distance_to(flat)
+		if d < best_d:
+			best_d = d
+			best = v
+	return best
+
+
+# --- the Avatar actually growing --------------------------------------------
+
+## Every point of devotion a villager prays or works into the village
+## stockpile also feeds the Avatar a fraction of itself. This is the missing
+## half of "grow the Avatar": praise (F) supplies the praise_count half of
+## avatar.gd's GROWTH_STAGES gate, this supplies the devotion half.
+func _on_devotion_changed(village_id: StringName, new_amount: float) -> void:
+	var last: float = float(_last_devotion.get(village_id, 0.0))
+	_last_devotion[village_id] = new_amount
+	var gained := new_amount - last
+	if gained > 0.0:
+		_avatar.feed_devotion(gained * AVATAR_DEVOTION_SHARE)
+
+
+## Keeps exactly one context tag open on the Avatar at all times, chosen from
+## where it actually is. Without this, praise_avatar/chastise_avatar
+## (already bound in project.godot, already handled by avatar.gd:299) had no
+## tag to reinforce, so pressing F taught the creature nothing — flagged as
+## an open gap by docs/systems/integration.md's own "Standalone / inert"
+## section. Two tags is deliberately the whole vocabulary here: a real
+## behaviour-driven tag set belongs to actors/avatar/, not to this file.
+func _update_avatar_context() -> void:
+	if not is_instance_valid(_avatar):
+		return
+	var apos := _avatar.global_position
+	var flat := Vector3(apos.x, 0.0, apos.z)
+	var near_village := false
+	for value in GameState.villages.values():
+		var v: Village = value
+		if v.loyal_to_rival:
+			continue
+		var origin := Vector3(v.position_on_island.x, 0.0, v.position_on_island.y)
+		if origin.distance_to(flat) <= Reach.radius_for_village(v.id) + 6.0:
+			near_village = true
+			break
+	var want: StringName = &"guard_village" if near_village else &"explore_new_place"
+	if want == _avatar_context:
+		return
+	if _avatar_context != &"":
+		_avatar.end_context(_avatar_context)
+	_avatar_context = want
+	_avatar.begin_context(want)
+
+
+# --- reacting to the world ---------------------------------------------------
+
+func _on_village_converted(village_id: StringName) -> void:
+	# GameState.village_converted has always been emitted (game_state.gd:64)
+	# and voice_lines.gd has always had a six-pair pool for it — but nothing
+	# in the repo ever called Voices.react(&"village_converted"). This is
+	# the payoff line for the game's central verb; it should not be silent.
+	Voices.react(&"village_converted", {"village_id": village_id})
+	_check_end_state()
+	_refresh_objective()
+
+
+func _on_village_lost(village_id: StringName) -> void:
+	var v: Village = GameState.get_village(village_id)
+	if v != null:
+		_louhi_note = "%s is beyond you now." % v.display_name
+	_check_end_state()
+	_refresh_objective()
+
+
+func _on_sanctum_destroyed(village_id: StringName) -> void:
+	# sanctum.gd:197 resets that village's faith to zero on destruction —
+	# a setback, not a defeat (the village is still there and still
+	# convertible). Surfaced so the player knows why the ring shrank.
+	var v: Village = GameState.get_village(village_id)
+	if v != null:
+		_louhi_note = "%s's Sanctum is rubble. Their faith went with it." % v.display_name
+	_refresh_objective()
+
+
+func _on_quest_changed(_quest_id: StringName) -> void:
+	_refresh_objective()
+
+
+func _on_scroll_learned(_rite_id: StringName) -> void:
+	_refresh_rites_label()
+	_refresh_objective()
+
+
+func _on_epithet_earned(_epithet: String, _reason: String) -> void:
+	_refresh_objective()
+
+
+func _on_louhi_sign(tier: int, village_id: StringName, description: String) -> void:
+	var v: Village = GameState.get_village(village_id)
+	var vname: String = v.display_name if v != null else "somewhere"
+	_louhi_note = "Louhi, at %s (sign %d): %s" % [vname, tier, description]
+	_check_end_state()
+	_refresh_objective()
+
+
+func _on_louhi_relented(village_id: StringName, _from_tier: int) -> void:
+	var v: Village = GameState.get_village(village_id)
+	if v != null:
+		_louhi_note = "Louhi has stopped looking at %s. For now." % v.display_name
+	_refresh_objective()
+
+
+# --- win, lose, and the honest third option ----------------------------------
+
+## A village is out of the game when Pohjola owns it (louhi_director.gd:321)
+## or when there is nobody left in it (villager.gd:1040). There is no reclaim
+## mechanic anywhere in this codebase — Louhi's own doc calls tier 2 "a
+## one-way door" — so this is genuinely terminal for that village.
+func _village_is_lost(v: Village) -> bool:
+	return v.loyal_to_rival or v.population <= 0
+
+
+func _check_end_state() -> void:
+	if _ending != Ending.NONE:
+		return
+	var total := 0
+	var converted := 0
+	var lost := 0
+	for value in GameState.villages.values():
+		var v: Village = value
+		total += 1
+		if _village_is_lost(v):
+			lost += 1
+		elif v.is_fully_converted():
+			converted += 1
+	if total == 0:
+		return
+	if lost >= total:
+		_declare_ending(Ending.DEFEAT, converted, lost, total)
+	elif converted + lost >= total:
+		# Everything still standing believes. If nothing was lost that is the
+		# island; if something was, this is as far as the island can ever go,
+		# and saying so is more honest than leaving the player to grind a
+		# village that can never be taken back.
+		_declare_ending(Ending.VICTORY if lost == 0 else Ending.DIVIDED, converted, lost, total)
+
+
+func _declare_ending(ending: int, converted: int, lost: int, total: int) -> void:
+	_ending = ending
+	var title := ""
+	var body := ""
+	match ending:
+		Ending.VICTORY:
+			title = "THE ISLAND IS YOURS"
+			body = "All %d villages say your name without being asked for it." % total
+		Ending.DIVIDED:
+			title = "THE ISLAND IS DIVIDED"
+			body = "%d of %d villages are yours. %d answer to Pohjola, and there is no way back through that door." % [converted, total, lost]
+		Ending.DEFEAT:
+			title = "THE ISLAND IS HERS"
+			body = "Every village on this rock answers to Louhi. You are still awake. That is the whole of what you are now."
+	var named := "Nobody got around to naming you."
+	if not GameState.epithets.is_empty():
+		# GameState.epithets IS the player's real scorecard — core/game_state.gd
+		# says so in its own doc comment, and until now nothing ever showed it.
+		var earned: PackedStringArray = PackedStringArray()
+		for e in GameState.epithets:
+			earned.append("    " + String(e))
+		named = "They called you:\n" + "\n".join(earned)
+	_end_card.text = "%s\n\n%s\n\n%s\n\nNothing further will happen here." % [title, body, named]
+	_end_card.visible = true
+	match ending:
+		Ending.VICTORY:
+			_voice_log.push_line(&"domovoi", "That is the whole island. I would like it on record that the ledger balanced, which has never once happened before.")
+			_voice_log.push_line(&"hiisi", "Record it, frame it, eat it. I am going to sleep in the biggest of the three.")
+		Ending.DIVIDED:
+			_voice_log.push_line(&"domovoi", "Most of it. Most is not all, and I am the one who has to write down which.")
+			_voice_log.push_line(&"hiisi", "Leave a blank line. Blank lines are delicious and nobody argues with them.")
+		Ending.DEFEAT:
+			_voice_log.push_line(&"domovoi", "She did not hurry. That is the part I would like you to sit with.")
+			_voice_log.push_line(&"hiisi", "I would make a joke here. I have looked at it from three sides. There isn't one.")
+	_refresh_objective()
+
+
+# --- the objective line ------------------------------------------------------
+
+func _refresh_objective() -> void:
+	var text := _build_objective_text()
+	# Only assign when it actually changed: a Label re-lays-out its text on
+	# every assignment, and this runs once a second forever.
+	if text == _objective_cache:
+		return
+	_objective_cache = text
+	_objective_label.text = text
+
+
+func _build_objective_text() -> String:
+	if _ending != Ending.NONE:
+		return "This island is finished."
+
+	var total := 0
+	var mine := 0
+	var lost := 0
+	var target: Village = null
+	var best_faith := -1.0
+	for value in GameState.villages.values():
+		var v: Village = value
+		total += 1
+		if _village_is_lost(v):
+			lost += 1
+			continue
+		if v.is_fully_converted():
+			mine += 1
+			continue
+		# Nearest to done first: finishing a village is worth more than
+		# starting one, and it keeps the objective from flapping.
+		if v.faith_fraction > best_faith:
+			best_faith = v.faith_fraction
+			target = v
+
+	var lines: PackedStringArray = PackedStringArray()
+	var header := "Yours: %d of %d villages." % [mine, total]
+	if lost > 0:
+		header += "   Lost to Pohjola: %d." % lost
+	lines.append(header)
+
+	if target != null:
+		var pct := int(round(target.faith_fraction * 100.0))
+		if target.faith_fraction >= Reach.TERROR_CEILING - 0.005:
+			lines.append("Now — %s (%d%%): fear has carried them as far as fear goes. The rest has to be given: harvest, rain, mending, a ward." % [target.display_name, pct])
+		else:
+			lines.append("Now — %s (%d%% theirs): hold right mouse and drag a rite over it." % [target.display_name, pct])
+
+	var active_title := _current_quest_title(target)
+	if active_title != "":
+		lines.append("Spoken of: \"%s\"" % active_title)
+
+	if _louhi_note != "":
+		lines.append(_louhi_note)
+
+	return "\n".join(lines)
+
+
+## Prefer a Louhi quest (she is the clock), then a quest about the village
+## the player is actually being pointed at, then whatever else is live.
+func _current_quest_title(target: Village) -> String:
+	var active: Array[StringName] = _campaign_manager.get_active_quests()
+	if active.is_empty():
+		return ""
+	var fallback := ""
+	var culture_match := ""
+	for quest_id in active:
+		var q: Quest = _campaign_manager.get_quest_def(quest_id)
+		if q == null:
+			continue
+		if String(quest_id).begins_with("q_louhi"):
+			return q.title
+		if target != null and q.culture_id == target.culture_id:
+			culture_match = q.title
+		if fallback == "":
+			fallback = q.title
+	return culture_match if culture_match != "" else fallback
+
+
+# --- the rites the player has actually been taught ---------------------------
+
+## Discovery problem, stated plainly: a gesture game in which the player is
+## never told what to draw is not a game. `campaign/scroll_book.gd` already
+## tracks which rites are known and `systems/sigils/sigil_templates.gd`
+## already carries a one-sentence English description of every shape — they
+## had simply never been shown to anybody. Toggled with 3, hidden by default,
+## because a permanently-open list is a HUD and this game does not have one.
+func _refresh_rites_label() -> void:
+	var known: Array[StringName] = ScrollBook.known_rite_ids()
+	var lines: PackedStringArray = PackedStringArray()
+	lines.append("RITES YOU KNOW")
+	for rite_id in known:
+		var desc: String = String(SigilTemplates.DESCRIPTIONS.get(rite_id, "A shape nobody wrote down."))
+		var kind := "gift"
+		if TERROR_RITE_AMOUNT.has(rite_id):
+			kind = "terror"
+		lines.append("\n%s  (%s)\n%s" % [String(rite_id).replace("_", " "), kind, desc])
+	lines.append("\nScrolls for the rest are quest rewards.")
+	_rites_label.text = "\n".join(lines)
 
 
 # ---------------------------------------------------------------------------
@@ -193,6 +820,18 @@ func _unhandled_input(event: InputEvent) -> void:
 			_camera_rig.frame_god_view(_god_view_marker.global_transform)
 		KEY_2:
 			_camera_rig.frame_sanctum_interior(get_node(WALKABLE_SANCTUM_PATH))
+		KEY_3:
+			_rites_label.visible = not _rites_label.visible
+		KEY_P:
+			# environment/graphics_preset.gd: LOW -> MEDIUM -> HIGH -> LOW.
+			_graphics_preset.cycle()
+			_refresh_help_label()
+		KEY_BRACKETLEFT:
+			# The old help text promised these two keys and nothing in this
+			# file implemented them — only actors/hand/hand_demo.gd did.
+			Naklon.shift(-0.1, 1.0)
+		KEY_BRACKETRIGHT:
+			Naklon.shift(0.1, 1.0)
 		KEY_L:
 			_louhi.debug_force_evaluate()
 
@@ -200,9 +839,9 @@ func _unhandled_input(event: InputEvent) -> void:
 func _refresh_help_label() -> void:
 	if _help_label == null:
 		return
+	var preset_text: String = GraphicsPreset.preset_name(_graphics_preset.current()) if _graphics_preset != null else "Low"
 	_help_label.text = (
-		"1: god view   2: walk into Fenrayt Hollow's Sanctum (arrows to walk once inside, Enter to interact)\n" +
-		"God view — arrows: pan camera   scroll: zoom   hold middle-click + drag: orbit\n" +
-		"Mouse: aim the Hand   Hold Left Click: grip/throw   Hold Right Click + drag: draw a sigil\n" +
-		"[ / ]: nudge Naklon toward Mercy / Cruelty   F / G: praise / chastise the Avatar   L: force Louhi to re-evaluate now"
+		"Mouse: aim the Hand   Hold Left Click: grip/throw   Hold Right Click + drag: draw a rite over a village\n" +
+		"Arrows: pan   Scroll: zoom   Middle-drag: orbit   3: rites you know   1: god view   2: walk into Fenrayt Hollow's Sanctum (Enter to interact)\n" +
+		"[ / ]: nudge Naklon toward Mercy / Cruelty   F / G: praise / chastise the Avatar   L: force Louhi to re-evaluate now   P: graphics preset (now: %s)" % preset_text
 	)

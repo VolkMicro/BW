@@ -9,11 +9,33 @@ sun_angle_max = 30.0
 
 [sub_resource type="Sky" id="Sky_1"]
 sky_material = SubResource("ProceduralSkyMaterial_1")
+; The sky's radiance cubemap is the ONLY ambient fill light in this scene
+; (ambient_light_source = 2, with SDFGI off) and it is also what the very
+; smooth ocean surface reflects (reflected_light_source = 2). Godot refilters
+; that cubemap on the GPU whenever the sky is dirty; in the REALTIME process
+; mode that is every single frame. This sky only changes when Naklon or the
+; weather moves it (environment/naklon_environment_driver.gd,
+; weather_environment_driver.gd), so INCREMENTAL — which spreads each
+; refresh across several frames instead of redoing it every frame — is both
+; cheaper and visually identical here. 128px is ample for a smooth
+; procedural gradient with no clouds or sun disc detail to resolve.
+; environment/graphics_preset.gd raises both of these back to 256/REALTIME
+; at the HIGH preset.
+process_mode = 2
+radiance_size = 2
 
 [resource]
 background_mode = 2
 sky = SubResource("Sky_1")
-ambient_light_source = 2
+; MUST be 3 (AMBIENT_SOURCE_SKY), not 2. Verified against the engine:
+; Environment.AMBIENT_SOURCE_COLOR == 2, AMBIENT_SOURCE_SKY == 3, and
+; ambient_light_color defaults to opaque BLACK. This file said 2 while every
+; comment around it described sky-driven ambient — so the scene was asking
+; for "flat colour ambient" and getting a colour nobody ever set, i.e. no
+; fill light at all. Harmless while SDFGI was on and supplying bounce light;
+; the moment SDFGI was disabled for integrated GPUs this became the reason
+; the island rendered almost black.
+ambient_light_source = 3
 ; Bumped from 1.0: with sdfgi_enabled=false (see the perf note below),
 ; there is no dynamic bounce light filling in shadowed/underside surfaces
 ; any more — sky-driven ambient is now the only fill light, so it needs to
@@ -24,7 +46,16 @@ reflected_light_source = 2
 tonemap_mode = 3
 tonemap_exposure = 1.0
 tonemap_white = 6.0
-glow_enabled = true
+; Glow is a mip-chain of downsample+blur+upsample passes over the whole 3D
+; buffer, every frame. It is genuinely cheap on a discrete GPU and genuinely
+; not cheap on an integrated one sharing memory bandwidth with the CPU.
+; These values are the ones the art-direction pass authored and are left
+; here untouched so the look is one property away; only the enable flag is
+; off, and environment/graphics_preset.gd turns it back on at MEDIUM/HIGH.
+; The checked-in default matches the LOW preset deliberately, so a machine
+; booting straight into LOW never renders a single frame of the expensive
+; configuration before the preset node runs.
+glow_enabled = false
 glow_levels/3 = 1.0
 glow_levels/5 = 0.6
 glow_intensity = 0.55
@@ -41,8 +72,10 @@ glow_hdr_threshold = 1.1
 ; ambient_light_source=2 (sky-driven ambient) below still lights
 ; everything without SDFGI's dynamic bounce; fog_enabled (a flat
 ; depth-based blend, not raymarched) stays on for cheap atmosphere.
+; All four are HIGH-preset-only now — see environment/graphics_preset.gd.
 ssao_enabled = false
 ssil_enabled = false
+ssr_enabled = false
 sdfgi_enabled = false
 volumetric_fog_enabled = false
 fog_enabled = true

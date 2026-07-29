@@ -3,25 +3,26 @@
 importer="texture"
 type="CompressedTexture2D"
 uid="uid://c06gk4bqyflys"
-path="res://.godot/imported/Rock023_1K-JPG_NormalGL.jpg-16e25a506fb0a3fb35e77f3c3eb52683.ctex"
+path.s3tc="res://.godot/imported/Rock023_1K-JPG_NormalGL.jpg-16e25a506fb0a3fb35e77f3c3eb52683.s3tc.ctex"
 metadata={
-"vram_texture": false
+"imported_formats": ["s3tc_bptc"],
+"vram_texture": true
 }
 
 [deps]
 
 source_file="res://assets/textures/terrain/rock/Rock023_1K-JPG_NormalGL.jpg"
-dest_files=["res://.godot/imported/Rock023_1K-JPG_NormalGL.jpg-16e25a506fb0a3fb35e77f3c3eb52683.ctex"]
+dest_files=["res://.godot/imported/Rock023_1K-JPG_NormalGL.jpg-16e25a506fb0a3fb35e77f3c3eb52683.s3tc.ctex"]
 
 [params]
 
-compress/mode=0
+compress/mode=2
 compress/high_quality=false
 compress/lossy_quality=0.7
 compress/hdr_compression=1
 compress/normal_map=0
 compress/channel_pack=0
-mipmaps/generate=false
+mipmaps/generate=true
 mipmaps/limit=-1
 roughness/mode=0
 roughness/src_normal=""

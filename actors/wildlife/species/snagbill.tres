@@ -1,0 +1,44 @@
+[gd_resource type="Resource" script_class="WildlifeSpecies" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://actors/wildlife/wildlife_species.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+id = &"snagbill"
+display_name = "Snagbill"
+one_line = "Follows anything with teeth, at a respectful distance, and leaves the moment it is being watched back."
+color_primary = Color(0.176, 0.196, 0.216, 1)
+color_accent = Color(0.784, 0.749, 0.639, 1)
+body_scale = 1.0
+label_height = 1.35
+collider_radius = 0.22
+collider_height = 0.9
+walk_speed = 2.3
+flee_speed = 6.4
+hunt_speed = 0.0
+turn_rate = 6.5
+flee_radius = 18.0
+calm_radius = 26.0
+calm_seconds = 6.5
+flee_step = 20.0
+home_range_radius = 42.0
+wander_step = 11.0
+wander_min_seconds = 2.0
+wander_max_seconds = 5.5
+graze_min_seconds = 2.5
+graze_max_seconds = 7.0
+is_herd = false
+cohesion_radius = 0.0
+cohesion_weight = 0.0
+is_predator = false
+hunts = PackedStringArray()
+hunt_radius = 0.0
+kill_range = 0.0
+seconds_to_hunger = 0.0
+feed_seconds = 0.0
+is_prey = true
+scavenges = true
+scavenge_radius = 60.0
+scavenge_seconds = 9.0
+think_interval = 0.3
+min_ground_height = 0.6

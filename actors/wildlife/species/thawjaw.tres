@@ -1,0 +1,44 @@
+[gd_resource type="Resource" script_class="WildlifeSpecies" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://actors/wildlife/wildlife_species.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+id = &"thawjaw"
+display_name = "Thawjaw"
+one_line = "One to an island, usually. Nobody has seen two together and been in a position to report it."
+color_primary = Color(0.212, 0.176, 0.141, 1)
+color_accent = Color(0.647, 0.612, 0.514, 1)
+body_scale = 1.0
+label_height = 1.9
+collider_radius = 0.44
+collider_height = 1.5
+walk_speed = 2.0
+flee_speed = 5.0
+hunt_speed = 5.6
+turn_rate = 3.0
+flee_radius = 8.0
+calm_radius = 13.0
+calm_seconds = 3.0
+flee_step = 16.0
+home_range_radius = 75.0
+wander_step = 18.0
+wander_min_seconds = 5.0
+wander_max_seconds = 11.0
+graze_min_seconds = 4.0
+graze_max_seconds = 10.0
+is_herd = false
+cohesion_radius = 0.0
+cohesion_weight = 0.0
+is_predator = true
+hunts = PackedStringArray("rimefleece")
+hunt_radius = 34.0
+kill_range = 1.8
+seconds_to_hunger = 85.0
+feed_seconds = 13.0
+is_prey = false
+scavenges = false
+scavenge_radius = 0.0
+scavenge_seconds = 0.0
+think_interval = 0.3
+min_ground_height = 1.0
