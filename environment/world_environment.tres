@@ -35,13 +35,14 @@ sky = SubResource("Sky_1")
 ; fill light at all. Harmless while SDFGI was on and supplying bounce light;
 ; the moment SDFGI was disabled for integrated GPUs this became the reason
 ; the island rendered almost black.
-ambient_light_source = 3
+ambient_light_source = 2
+ambient_light_color = Color(0.62, 0.66, 0.70, 1)
 ; Bumped from 1.0: with sdfgi_enabled=false (see the perf note below),
 ; there is no dynamic bounce light filling in shadowed/underside surfaces
 ; any more — sky-driven ambient is now the only fill light, so it needs to
 ; carry more of that load or the world reads flat/dark. Tune down if a
 ; real low-end run shows it blowing out highlights instead.
-ambient_light_energy = 1.6
+ambient_light_energy = 0.06
 reflected_light_source = 2
 tonemap_mode = 3
 tonemap_exposure = 1.0

@@ -526,3 +526,99 @@ Close to nothing, and worth stating precisely:
 | `world/ocean/ocean_surface.gd` | Quality toggle + runtime `#define` codegen; subdivision cap; wave-count cap; shadow casting off; CPU shore-mask bake; group registration |
 | `world/terrain/terrain_triplanar.gdshader` | Weight-culled triplanar sampling with explicit `textureGrad` gradients; anisotropy -> trilinear |
 | `docs/systems/performance_lowspec.md` (new) | This file |
+
+---
+
+## Round four: the island was not dark because of the GPU. It was inside-out.
+
+Round three shipped with the island rendering as a flat, near-black
+blue-grey slab. That was assumed to be a side effect of disabling SDFGI for
+integrated graphics — losing the bounce light. It was not. Two real,
+independent bugs were found by measuring rendered pixels instead of
+reasoning about the settings, and both predate the low-spec work.
+
+### Bug 1: every sun in the project pointed at the sky
+
+All eleven `.tscn` files carried the same `DirectionalLight3D` basis. A
+`DirectionalLight3D` emits along its local **-Z**. Reading that basis back
+out of the engine:
+
+```
+light shines along -Z = (0.69, 0.52, -0.5)   Y = +0.52
+```
+
+Positive Y — the sun was lighting the sky, not the ground. Harmless while
+SDFGI supplied bounce light, which is why it survived this long. Replaced
+in all eleven scenes with a verified basis (orthonormal, determinant 1.0,
+`-Z` Y-component **-0.78**).
+
+### Bug 2 — the real one: `cull_disabled` on the terrain
+
+An earlier pass hit small holes through steep ridge slopes and switched
+`world/terrain/terrain_triplanar.gdshader` from `cull_back` to
+`cull_disabled`, reasoning that a heightfield cannot overhang so drawing
+both sides is free insurance.
+
+It is not free. Both faces of a triangle land at the *same depth*, so which
+one survives the depth test is arbitrary — and Godot flips the shading
+normal to point **down** on a back face. Wherever the back face won, the
+terrain was lit as the underside of the world: no sun, ambient only.
+
+Measured on the same mesh, same white albedo, same light:
+
+| cull mode | island |
+|---|---|
+| `cull_back` | (224, 230, 236) — correctly lit |
+| `cull_front` | (85, 105, 136) — the flipped-normal underside |
+| `cull_disabled` | (85, 105, 136) — i.e. the underside was winning |
+
+The winding out of `island_generator.gd` was correct all along. The holes
+had already been fixed properly at the source (lower ridge-noise weight
+plus the `_sample_grid()` smoothing pass), so the workaround was doing
+nothing but damage. Reverted to `cull_back`.
+
+**How much time this cost, and why:** the symptom looked exactly like a
+lighting or exposure problem, so sun direction, sun energy (tested at 7x),
+shadows, ambient source and energy, tonemapper mode and white point, fog,
+normal maps, roughness, sky reflections, the ocean and the graphics-preset
+node were each ruled out by individual measured renders first. Every one
+came back "no change", which was itself the clue: a surface that ignores
+*all* lighting is not badly lit, it is facing the wrong way. The lesson
+worth keeping is to measure the mesh in isolation early — a plain
+`StandardMaterial3D` on the same mesh reproduced the bug immediately and
+would have found it in one render instead of a dozen.
+
+### Consequence: the scene was then massively overexposed
+
+With the sun actually reaching the ground, the light levels tuned during
+the dark period were far too high. Measured with a known flat albedo of
+0.1, the surface rendered at ~0.5 linear — roughly 5x over. Sun energy is
+now **0.22** (was 1.4) across all eleven scenes and ambient is **0.06**.
+
+Two properties also had to stop being overwritten. `weather_environment_driver.gd`
+was writing `ambient_light_energy`, `tonemap_exposure`,
+`background_energy_multiplier` and `fog_light_energy` as hard absolutes
+(`lerpf(1.0, 0.45, gloom)` and friends), silently discarding whatever the
+`.tres` was authored with — so editing exposure in the file changed nothing
+at runtime. It now captures those four at `_ready()` and *scales* them,
+which is how it already treated fog density. `naklon_environment_driver.gd`
+does the same thing to `tonemap_white` (5.0 mercy / 8.5 cruelty); that one
+is left as-is because it is a deliberate art-direction curve, but it is
+recorded here because it is the same trap.
+
+### Not a bug: the island reads grey, not green
+
+`Naklon.unit()` returns **0.5** at neutral alignment, not 0.0. The terrain
+shader uses that for `cruelty_rock_bias` (0.3 at neutral, so ~30% bare
+rock) and to blend `mercy_tint` toward `cruelty_tint`. A neutral god is
+supposed to look neither lush nor burnt. Pressing `[` toward Mercy is what
+turns the island green. This was mistaken for a texture failure during the
+hunt above; it is the art direction working.
+
+### Still unverified
+
+Every number here was measured under Mesa `lavapipe` (software Vulkan) —
+correct for logic and relative comparisons, not evidence of real-hardware
+appearance or frame rate. Exposure in particular deserves a human eye on
+the actual laptop; the values above are defensible from measurement, not
+from looking at a real screen.

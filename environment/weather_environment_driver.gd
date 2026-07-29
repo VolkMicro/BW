@@ -74,12 +74,32 @@ var _tween: Tween
 var _last_gloom: float = 0.0
 var _last_fog_multiplier: float = 1.0
 
+## Baselines captured from the .tres at _ready(), BEFORE this driver writes
+## anything. Fog already worked this way (see _base_fog_density()); these
+## four did not — they were written as hard absolutes (ambient 1.0 clear /
+## 0.45 storm, exposure 1.0 / 0.5, and so on), which silently overrode
+## whatever exposure the .tres was authored with the moment this node
+## entered the tree. That made the checked-in ambient_light_energy dead
+## weight: editing it changed nothing at runtime, which is exactly the kind
+## of "the file says one thing, the game does another" trap that cost a
+## long debugging session once terrain lighting was fixed and the scene
+## turned out to be badly overexposed. Now gloom SCALES the authored
+## values, so the .tres stays the single place exposure is tuned.
+var _base_ambient_energy: float = 1.0
+var _base_tonemap_exposure: float = 1.0
+var _base_bg_energy: float = 1.0
+var _base_fog_light_energy: float = 1.0
+
 
 func _ready() -> void:
 	_environment = load(ENVIRONMENT_PATH)
 	if _environment == null:
 		push_warning("WeatherEnvironmentDriver: could not load %s" % ENVIRONMENT_PATH)
 		return
+	_base_ambient_energy = _environment.ambient_light_energy
+	_base_tonemap_exposure = _environment.tonemap_exposure
+	_base_bg_energy = _environment.background_energy_multiplier
+	_base_fog_light_energy = _environment.fog_light_energy
 	# Weather is an autoload; it already emitted once from its own _ready()
 	# before this node's _ready() can possibly run (autoloads initialize
 	# ahead of the main scene tree), so that first emit would otherwise be
@@ -129,10 +149,12 @@ func _apply(state: Dictionary, animate: bool) -> void:
 
 	var target_fog_density := base_fog * _last_fog_multiplier
 	var target_vfog_density := base_vfog * _last_fog_multiplier
-	var target_exposure := lerpf(1.0, 0.5, _last_gloom)
-	var target_ambient := lerpf(1.0, 0.45, _last_gloom)
-	var target_bg_energy := lerpf(1.0, 0.5, _last_gloom)
-	var target_fog_light_energy := lerpf(1.0, 0.4, _last_gloom)
+	# Each is the AUTHORED baseline scaled by gloom, not a hard absolute —
+	# see the _base_* declarations above for why that distinction matters.
+	var target_exposure := _base_tonemap_exposure * lerpf(1.0, 0.5, _last_gloom)
+	var target_ambient := _base_ambient_energy * lerpf(1.0, 0.45, _last_gloom)
+	var target_bg_energy := _base_bg_energy * lerpf(1.0, 0.5, _last_gloom)
+	var target_fog_light_energy := _base_fog_light_energy * lerpf(1.0, 0.4, _last_gloom)
 
 	if animate and ease_seconds > 0.0:
 		if _tween and _tween.is_valid():

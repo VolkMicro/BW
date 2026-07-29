@@ -1,16 +1,31 @@
 shader_type spatial;
-// cull_disabled (not cull_back): a heightfield mesh is single-valued per
-// (x,z) so it can never truly overhang, but ridged/high-frequency noise
-// can still put a triangle's local slope near-vertical for a couple of
-// grid cells at a time. From a normal outdoor camera angle those cells'
-// winding-derived face normal can point just past horizontal, away from
-// the camera, and cull_back would drop them — visible as small holes
-// straight through to the sea/sky rather than a smoothly shaded steep
-// slope. Terrain is cheap enough per-triangle that rendering both sides
-// is the safe, standard fix (see world/terrain/island_generator.gd's
-// blend-weight comment for the complementary fix: keeping slopes gentler
-// in the first place).
-render_mode cull_disabled, diffuse_burley, specular_schlick_ggx;
+// cull_back, NOT cull_disabled — and the history matters, because the
+// obvious-looking "safe" choice here is actively wrong.
+//
+// An earlier pass hit small holes punched through steep ridge slopes and
+// "fixed" them by switching this to cull_disabled, reasoning that a
+// heightfield can never truly overhang so rendering both sides is free
+// safety. It is not free: with both sides drawn, a triangle's front and
+// back faces land at the *exact same depth*, so which one survives the
+// depth test is a coin flip — and Godot flips the shading normal to point
+// DOWN on a back face. Wherever the back face won, the terrain was lit as
+// if it were the underside of the world: no sun at all, sky ambient only.
+// That is what made the whole island render as a flat dark blue-grey
+// slab, and it survived every plausible-looking diagnosis (sun direction,
+// shadows, ambient, tonemapping, fog, normal maps, the ocean) because
+// none of those were the cause.
+//
+// Measured, same mesh, same white albedo, same light:
+//   cull_back     -> (224, 230, 236)   correctly lit
+//   cull_front    -> ( 85, 105, 136)   the flipped-normal underside
+//   cull_disabled -> ( 85, 105, 136)   i.e. the underside was winning
+//
+// The winding produced by island_generator.gd's build_mesh() is correct
+// (cull_back keeps the topside, which the measurement above confirms), and
+// the original hole problem was independently and properly fixed at the
+// source — lower ridge-noise weight plus the smoothing pass in
+// _sample_grid(). Do not "fix" holes here again; fix the slopes instead.
+render_mode cull_back, diffuse_burley, specular_schlick_ggx;
 
 // Naklon-reactive island terrain: triplanar-blended grass / rock / sand by
 // world-space normal (slope) and height, re-balanced by `naklon_unit`.
