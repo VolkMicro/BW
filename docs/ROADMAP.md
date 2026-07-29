@@ -56,6 +56,13 @@ at that scale, and carries 15 villages planned onto the real terrain.
 Next: Phase 2, daily life.**
 
 Done since the roadmap was written:
+- **You can tell the villages apart.** `ui/village_markers.gd` floats a name
+  and one line of state over each one — who holds it, how convinced it is,
+  whether it is hungry or out of firewood, and for a village Louhi holds, how
+  much of her grip is left. Colour-coded, and only ONE fact per village:
+  fifteen captions each reciting three numbers is the unreadable board this
+  was built to fix. Sized by photographing two failures (44pt was a pile,
+  30pt was illegible from playing altitude).
 - **The player can SEE the gestures now.** `ui/rite_grimoire.gd` draws every
   rite's actual stroke — the exact point list `SigilTemplates` has held since
   it was written — with a start dot, an arrowhead at the finish and a line

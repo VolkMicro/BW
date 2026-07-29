@@ -410,6 +410,11 @@ func _place_villages_and_villagers() -> void:
 	var buildings := get_node_or_null(^"VillageBuildings") as VillageBuildings
 	if buildings:
 		buildings.build()
+	# Same ordering reason again: the markers need every village's final
+	# terrain-resolved position to float above the right piece of ground.
+	var markers := get_node_or_null(^"VillageMarkers") as VillageMarkers
+	if markers:
+		markers.build(_island)
 
 
 ## Builds the scene-side half of a planned village: the anchor, its Sanctum,
