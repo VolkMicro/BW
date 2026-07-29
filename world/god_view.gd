@@ -56,6 +56,12 @@ const VILLAGERS_PER_VILLAGE := 5
 ## see world/village/settlement_planner.gd for why they are not authored.
 const TOTAL_VILLAGES := 15
 
+## Store level at or below which the objective line calls a village short.
+## Not zero: by the time a granary is actually empty the village has already
+## been losing devotion for a while, and a warning that arrives with the
+## damage is not a warning.
+const NEED_WARNING_LEVEL := 12.0
+
 ## One entry per village: which culture, where its container anchor lives in
 ## the scene tree (X/Z authored on that Node3D in world/god_view.tscn; Y is
 ## filled in below from the real terrain), and its starting
@@ -690,6 +696,7 @@ func _on_rite_cast(rite_id: StringName, confidence: float) -> void:
 		# Fires Voices &"village_helped" and shifts Naklon toward mercy —
 		# both already implemented in systems/faith/reach.gd:146-154.
 		Reach.convert_via_help(target.id, float(HELP_RITE_AMOUNT[rite_id]) * quality)
+		_deliver_rite_goods(target, rite_id, quality)
 	elif TERROR_RITE_AMOUNT.has(rite_id):
 		Reach.convert_via_terror(target.id, float(TERROR_RITE_AMOUNT[rite_id]) * quality)
 	# Any other recognized rite id has no conversion meaning; the VFX and the
@@ -698,6 +705,32 @@ func _on_rite_cast(rite_id: StringName, confidence: float) -> void:
 
 	_maybe_tip_over(target)
 	_refresh_objective()
+
+
+## WHAT A HELP RITE ACTUALLY PUTS IN THE STORE.
+##
+## `harvest` is called a harvest. Before this it produced no food — it moved a
+## faith number and nothing else, which was survivable while nobody ate, and
+## became a lie the moment villagers started going hungry and the objective
+## line started telling the player to cast it at them. A god who answers a
+## famine with a rite named harvest has to actually fill the granary.
+##
+## The amounts are one workday, not a season: RITE_GOODS values are roughly
+## what a village's food workers produce in half a minute, so a rite relieves
+## a shortage and buys time to fix the cause. It does not remove the need to
+## have people in the fields, which is the thing that makes the village a
+## simulation rather than a vending machine.
+const RITE_GOODS: Dictionary = {
+	&"harvest": {&"food": 42.0},
+	&"rain_call": {&"food": 24.0},   # water for the fields, not food in hand
+	&"lumber": {&"wood": 38.0},
+	&"repair": {&"wood": 14.0},      # timber for the mending, spent on the way
+}
+
+func _deliver_rite_goods(v: Village, rite_id: StringName, quality: float) -> void:
+	var goods: Dictionary = RITE_GOODS.get(rite_id, {})
+	for resource in goods:
+		Stockpile.add(v, resource, float(goods[resource]) * quality)
 
 
 ## See CONVERSION_TIPPING_POINT. Emits through GameState.set_faith_fraction()
@@ -963,6 +996,32 @@ func _build_objective_text() -> String:
 			lines.append("Now — %s (%d%%): fear has carried them as far as fear goes. The rest has to be given: harvest, rain, mending, a ward." % [target.display_name, pct])
 		else:
 			lines.append("Now — %s (%d%% theirs): hold right mouse and drag a rite over it." % [target.display_name, pct])
+
+	# WHAT THE ISLAND NEEDS, in words the player can act on.
+	#
+	# The villagers now genuinely eat and burn firewood (see
+	# systems/economy/village_economy.gd), and a village going short loses
+	# devotion for it — but from 300 m up that is invisible, and an invisible
+	# simulation is the same as no simulation. This names the shortage and,
+	# because each shortage has a rite that answers it, doubles as the hint:
+	# hungry wants `harvest`, cold wants `lumber`.
+	var hungry: int = 0
+	var cold: int = 0
+	for value in GameState.villages.values():
+		var v: Village = value
+		if _village_is_lost(v):
+			continue
+		if Stockpile.get_amount(v, &"food") <= NEED_WARNING_LEVEL:
+			hungry += 1
+		if Stockpile.get_amount(v, &"wood") <= NEED_WARNING_LEVEL:
+			cold += 1
+	if hungry > 0 or cold > 0:
+		var parts: PackedStringArray = PackedStringArray()
+		if hungry > 0:
+			parts.append("%d hungry (harvest)" % hungry)
+		if cold > 0:
+			parts.append("%d out of firewood (lumber)" % cold)
+		lines.append("On the island: " + ", ".join(parts) + ".")
 
 	var active_title := _current_quest_title(target)
 	if active_title != "":
