@@ -63,7 +63,9 @@ enum Job { IDLE, FISHING, FIELD, WOODCUTTING, BUILDING, FAMILY }
 enum State { WALKING, WORKING, RESTING }
 
 @export var terrain_path: NodePath
-## Villagers per village. The design target is ~40.
+## Fallback headcount, used only for a village whose `population` is unset.
+## The real number comes from `Village.population`, which SettlementPlanner
+## derives from the quality of the ground — see _add_village().
 @export var per_village: int = 40
 ## Off by default. Godot runs a child's _ready() BEFORE its parent's, so a
 ## crowd that populated itself on ready would always find GameState empty —
@@ -107,6 +109,15 @@ var _timer := PackedFloat32Array()
 var _speed := PackedFloat32Array()
 var _yaw := PackedFloat32Array()
 
+## Per-village live job tally: one PackedInt32Array of Job.size() counters per
+## village, kept up to date as agents change their minds.
+##
+## Recounted incrementally rather than by scanning the population on demand:
+## the economy asks for these numbers every tick, for every village, for every
+## job, and a scan is O(population) each time — 27000 comparisons a frame at
+## fifteen villages. An increment and a decrement in _decide() is free.
+var _job_counts: Array = []
+
 var _village_ids: Array[StringName] = []
 var _village_centre: Array = []      # Vector2 per village
 ## Named work sites per village: {job -> Vector3}. Found once, at populate
@@ -147,11 +158,10 @@ func count_job(village_id: StringName, job: int) -> int:
 	var vi := _village_ids.find(village_id)
 	if vi < 0:
 		return 0
-	var n := 0
-	for i in _village.size():
-		if _village[i] == vi and _job[i] == job:
-			n += 1
-	return n
+	var counts: PackedInt32Array = _job_counts[vi]
+	if job < 0 or job >= counts.size():
+		return 0
+	return counts[job]
 
 # ---------------------------------------------------------------------------
 # Populating
@@ -163,8 +173,16 @@ func _add_village(v: Village) -> void:
 	var centre: Vector2 = v.position_on_island
 	_village_centre.append(centre)
 	_village_sites.append(_find_work_sites(centre))
+	var counts := PackedInt32Array()
+	counts.resize(Job.size())
+	counts.fill(0)
 
-	for _n in per_village:
+	# The village's OWN population, not a flat constant. SettlementPlanner sizes
+	# each settlement by how good its ground is, and the economy charges upkeep
+	# per head — spawning forty people into a village the ledger thinks has
+	# twenty-three makes the workforce and the mouths two different numbers.
+	var headcount: int = v.population if v.population > 0 else per_village
+	for _n in headcount:
 		# Scatter around the village centre, but only onto ground a person
 		# could stand on; a few rejected attempts is cheaper than spawning
 		# somebody in the surf and dealing with it later.
@@ -181,10 +199,16 @@ func _add_village(v: Village) -> void:
 		_target.append(p)
 		_village.append(vi)
 		_job.append(Job.IDLE)
+		counts[Job.IDLE] += 1
 		_state.append(State.RESTING)
 		_timer.append(_rng.randf() * 4.0)
 		_speed.append(walk_speed * _rng.randf_range(1.0 - speed_variation, 1.0 + speed_variation))
 		_yaw.append(_rng.randf() * TAU)
+
+	# Appended AFTER the loop, not before it: Packed*Array is a value type in
+	# GDScript, so appending first would have stored a copy and every
+	# increment above would have gone into a local nobody reads.
+	_job_counts.append(counts)
 
 ## Finds a real place on the terrain for each kind of work, so villagers walk
 ## somewhere meaningful instead of milling about the village centre.
@@ -252,13 +276,27 @@ func _process(delta: float) -> void:
 
 ## Re-decides a bounded slice of agents. Round-robin over the whole population
 ## so every agent is reached at a predictable rate regardless of population.
+## DISTANCE NO LONGER GATES DECIDING, and that is a fix, not a regression.
+##
+## The original design skipped decisions for agents beyond `detail_distance`,
+## reasoning that a distant village should be "motion, not agents". That was
+## true while the economy read an authored job dictionary. It stopped being
+## true the moment the economy started reading the crowd's real job counts:
+## every village more than 260 m from the camera reported zero workers, so its
+## granary and woodpile drained to nothing and it sat there starving and
+## freezing while the player looked the other way. Verified — twelve of
+## fifteen villages at food 0.0 / wood 0.0 with forty idle people each.
+##
+## Skipping them saved nothing anyway. `agents_per_tick` is what bounds the
+## cost; the distance test only decided WHICH agents got the frame's twenty
+## slots, and spending them on the village you happen to be looking at is not
+## worth starving the other fourteen. `_is_detailed()` stays for per-agent
+## visual work that genuinely does not matter at distance.
 func _decide_slice() -> void:
 	var n := mini(agents_per_tick, _pos.size())
 	for _k in n:
 		var i := _cursor
 		_cursor = (_cursor + 1) % _pos.size()
-		if not _is_detailed(i):
-			continue      # distant village: keeps walking, stops deciding
 		_decide(i)
 
 func _decide(i: int) -> void:
@@ -267,36 +305,61 @@ func _decide(i: int) -> void:
 	if v == null:
 		return
 
-	# Weather and the state of the village choose the work, in that order:
-	# nobody fishes in a storm, and a half-burnt Sanctum pulls hands onto
-	# rebuilding it whatever else they had planned.
+	# WHAT THE VILLAGE NEEDS decides the work now, not a fixed dice table.
+	#
+	# The old version rolled the same weights forever, so a village with empty
+	# granaries and a full woodpile kept sending the same third of its people
+	# into the trees. Job choice reads the stores instead: an empty larder pulls
+	# hands onto food, an empty woodpile pulls them into the forest, and once
+	# both are full people go home to their families. That is what makes the
+	# economy (systems/economy/village_economy.gd) a loop rather than a readout
+	# — it consumes what these people produce, and they answer the shortfall.
 	var storm: bool = bool(Weather.current.get("is_storm", false))
 	var precip: float = float(Weather.current.get("precipitation", 0.0))
+	var night: bool = bool(Weather.current.get("is_night", false))
 	var hurt := v.sanctum_hp < v.sanctum_hp_max * 0.75
 
+	# Need = how empty the store is, 0..1. Squared so a half-full larder is
+	# only a quarter as urgent as an empty one — people should drift to
+	# whatever is actually running out, not hedge evenly between the two.
+	var food_need: float = _shortfall(v, &"food")
+	var wood_need: float = _shortfall(v, &"wood")
+
 	var job := Job.IDLE
-	if storm:
-		job = Job.FAMILY          # indoors
-	elif hurt and _rng.randf() < 0.5:
+	if storm or night:
+		# Indoors: out of the weather, or asleep. A handful stay up.
+		job = Job.FAMILY if _rng.randf() < 0.85 else Job.IDLE
+	elif hurt and _rng.randf() < 0.5 * (1.0 - food_need):
+		# Rebuilding the Sanctum pulls hands off everything else — but it
+		# yields to an empty larder. Observed without this: Raimborn Shore put
+		# ten of its eighteen people on a damaged roof while its food ran to
+		# 0.5. People fix the roof when they have eaten.
 		job = Job.BUILDING
 	else:
-		var roll := _rng.randf()
-		if precip > 0.4:
-			# Rain is good for fields and bad for everything else.
-			job = Job.FIELD if roll < 0.55 else Job.FAMILY
-		elif roll < 0.30:
-			job = Job.WOODCUTTING
-		elif roll < 0.58:
-			job = Job.FIELD
-		elif roll < 0.80:
-			job = Job.FISHING
-		elif roll < 0.92:
-			job = Job.FAMILY
-		else:
-			job = Job.IDLE
+		food_need *= food_need
+		wood_need *= wood_need
 
+		# Rain is good for the fields and bad for everything else, so it moves
+		# effort within food work rather than changing how much food is wanted.
+		var wet: float = clampf(precip, 0.0, 1.0)
+		var weights := {
+			Job.FIELD: 0.20 + food_need * 1.5 * (0.55 + wet * 0.45),
+			Job.FISHING: 0.16 + food_need * 1.5 * (0.45 - wet * 0.40),
+			Job.WOODCUTTING: 0.16 + wood_need * 1.7,
+			# The floor under home life is what stops a village in trouble from
+			# turning into a workforce with no families in it.
+			Job.FAMILY: 0.30,
+			Job.IDLE: 0.10,
+		}
+		job = _weighted_pick(weights)
+
+	var vi := _village[i]
+	var counts: PackedInt32Array = _job_counts[vi]
+	counts[_job[i]] -= 1
+	counts[job] += 1
+	_job_counts[vi] = counts     # PackedInt32Array is a value type in GDScript
 	_job[i] = job
-	var sites: Dictionary = _village_sites[_village[i]]
+	var sites: Dictionary = _village_sites[vi]
 	var site: Vector3 = sites.get(job, sites[Job.IDLE])
 	# Spread the crowd out around the work site rather than stacking everyone
 	# on one point — without this a job site looks like a single flickering
@@ -308,6 +371,27 @@ func _decide(i: int) -> void:
 		want = Vector2(site.x, site.z)
 	_target[i] = Vector3(want.x, _height(want), want.y)
 	_state[i] = State.WALKING
+
+## How empty this village's store of `resource` is, 0 (full) .. 1 (empty).
+func _shortfall(v: Village, resource: StringName) -> float:
+	var cap: float = Stockpile.capacity(v, resource)
+	if cap <= 0.0:
+		return 1.0
+	return clampf(1.0 - Stockpile.get_amount(v, resource) / cap, 0.0, 1.0)
+
+## Picks a key from {job: weight}. Weights need not sum to anything.
+func _weighted_pick(weights: Dictionary) -> int:
+	var total := 0.0
+	for w in weights.values():
+		total += maxf(float(w), 0.0)
+	if total <= 0.0:
+		return Job.IDLE
+	var roll := _rng.randf() * total
+	for job in weights:
+		roll -= maxf(float(weights[job]), 0.0)
+		if roll <= 0.0:
+			return job
+	return Job.IDLE
 
 func _move_all(delta: float) -> void:
 	for i in _pos.size():
@@ -376,6 +460,7 @@ func _clear() -> void:
 	_pos.clear(); _target.clear(); _village.clear(); _job.clear()
 	_state.clear(); _timer.clear(); _speed.clear(); _yaw.clear()
 	_village_ids.clear(); _village_centre.clear(); _village_sites.clear()
+	_job_counts.clear()
 	if _mm != null and is_instance_valid(_mm):
 		_mm.queue_free()
 	_mm = null

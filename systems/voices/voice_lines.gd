@@ -72,6 +72,8 @@ const _PACING_COOLDOWN_MSEC := {
 	&"village_child_born": 25000,
 	&"village_child_matured": 25000,
 	&"stockpile_overflow": 30000,
+	&"village_hungry": 25000,
+	&"village_cold": 25000,
 	&"construction_started": 12000,
 	&"construction_completed": 12000,
 	&"avatar_surprised_expectation": 15000,
@@ -953,6 +955,36 @@ func _build_pairs() -> void:
 		_p("sj6",
 			"Failed to read. No power spent, no harm done, and the next attempt is free. That's the kindest thing this whole system does.",
 			"Free attempts! In this economy! Domovoi, is that even legal?"),
+	]
+
+	# --- Economy: daily needs (systems/economy/village_economy.gd) --------
+	# village_hungry / village_cold: {village_id, village_name}
+	#
+	# These fire when a village has actually gone without for six seconds, not
+	# on a one-frame dip. Both Voices read the same fact differently, which is
+	# the point of having two of them: Domovoi counts the cost, Hiisi enjoys
+	# the drama.
+	_pairs[&"village_hungry"] = [
+		_p("vh1",
+			"{village} has eaten the last of it. Whatever they do tomorrow, they will do it hungry.",
+			"Hungry people are wonderfully decisive. Nobody deliberates on an empty stomach."),
+		_p("vh2",
+			"No food left in {village}. They will pray harder now, and mean it less.",
+			"Mean it less! Domovoi, that is nearly a joke. I am so proud."),
+		_p("vh3",
+			"The stores at {village} are empty. Send them a harvest or watch what they decide about you.",
+			"Watch either way. That is the good part."),
+	]
+	_pairs[&"village_cold"] = [
+		_p("vc1",
+			"{village} is burning the last of its wood. After that it is just people and the weather.",
+			"And the weather has never once lost that argument."),
+		_p("vc2",
+			"No firewood at {village}. Cold does not kill them tonight, but they will remember who let it in.",
+			"They always remember the cold. Never the summers. Very poor bookkeeping."),
+		_p("vc3",
+			"The fires are out in {village}. Someone should have been in the trees this afternoon.",
+			"Someone was! Fishing. I watched. It was a beautiful waste of a day."),
 	]
 
 	# --- Economy: stockpile (systems/economy/village_economy.gd) ----------

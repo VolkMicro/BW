@@ -10,6 +10,15 @@ extends Node
 ## Never run with --headless: that disables the rendering server entirely
 ## and produces a blank/failed capture (see docs/rendering.md).
 
+func _find_crowd(n: Node) -> Node:
+	if n is VillagerCrowd:
+		return n
+	for c in n.get_children():
+		var f := _find_crowd(c)
+		if f != null:
+			return f
+	return null
+
 func _ready() -> void:
 	var scene_path := OS.get_environment("SHOT_SCENE")
 	var out_path := OS.get_environment("SHOT_OUT")
@@ -48,6 +57,25 @@ func _ready() -> void:
 			var v: Village = GameState.villages[v_id]
 			print("VILLAGE %s | %s | %s | pop %d | faith %.2f"
 				% [v.id, v.display_name, v.position_on_island, v.population, v.faith_fraction])
+
+	# SHOT_DUMP_ECONOMY: print each village's stores and live job counts. The
+	# whole point of Phase 2 is that these numbers move and answer each other,
+	# and a screenshot cannot show a ledger.
+	if OS.get_environment("SHOT_DUMP_ECONOMY") != "":
+		var crowd: Node = _find_crowd(self)
+		for v_id in GameState.villages:
+			var v: Village = GameState.villages[v_id]
+			var line := "ECON %s | food %.1f | wood %.1f | devotion %.1f" % [
+				v.display_name,
+				Stockpile.get_amount(v, &"food"), Stockpile.get_amount(v, &"wood"), v.devotion]
+			if crowd != null:
+				line += " | field %d fish %d wood %d family %d idle %d" % [
+					crowd.count_job(v.id, VillagerCrowd.Job.FIELD),
+					crowd.count_job(v.id, VillagerCrowd.Job.FISHING),
+					crowd.count_job(v.id, VillagerCrowd.Job.WOODCUTTING),
+					crowd.count_job(v.id, VillagerCrowd.Job.FAMILY),
+					crowd.count_job(v.id, VillagerCrowd.Job.IDLE)]
+			print(line)
 
 	# SHOT_CAM="x,y,z,tx,ty,tz": park the active camera at x/y/z looking at
 	# tx/ty/tz. Without it a shot is stuck with whatever the scene authored,

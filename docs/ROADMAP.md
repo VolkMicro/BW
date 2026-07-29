@@ -56,6 +56,29 @@ at that scale, and carries 15 villages planned onto the real terrain.
 Next: Phase 2, daily life.**
 
 Done since the roadmap was written:
+- **PHASE 2 STARTED: villagers have needs, and the ledger answers them.**
+  Food and firewood are consumed every tick; a cold night burns more wood
+  than a warm afternoon; a village that runs short loses devotion and a
+  little faith, and the Voices say so after six seconds of it (not on a
+  one-frame dip). Job choice is no longer a fixed dice table — it reads the
+  stores, so an empty larder pulls hands onto food and an empty woodpile
+  pulls them into the trees. Rebuilding a damaged Sanctum yields to hunger.
+  The economy reads LIVE job counts from `VillagerCrowd.count_job()` instead
+  of the authored `Village.jobs` dictionary nothing ever updated (this closes
+  the last 1a item), and the crowd spawns each village's OWN population
+  rather than a flat 40, so the workforce and the mouths are the same number.
+  Verified over ~400 frames: fifteen villages at genuinely different levels,
+  three of them running short and losing devotion for it.
+  TWO TRAPS FOUND AND FIXED HERE, both worth knowing:
+  1. Distance used to gate DECIDING. Once the economy read real job counts,
+     every village more than 260 m from the camera reported zero workers and
+     quietly starved — twelve of fifteen at food 0.0 with forty idle people.
+     `agents_per_tick` is what bounds the cost; distance only decided which
+     agents got the frame's slots.
+  2. Production was tuned when villagers were a stand-in dictionary. One
+     field hand fed eighteen people, so every village sat pinned at its
+     storage cap and no shortage could ever happen. Food per worker 0.9 ->
+     0.22, wood 0.7 -> 0.16, firewood burn 0.004 -> 0.012 per head.
 - **The sun moves.** `environment/day_cycle_driver.gd` drives the scene's
   DirectionalLight3D off `Weather.day_phase()` — a ten-minute day, sunrise
   through noon to a cold dim night. Phase 2 is about villagers having a day,

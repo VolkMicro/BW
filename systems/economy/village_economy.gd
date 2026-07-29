@@ -37,17 +37,68 @@ signal construction_cancelled(village_id: StringName, building_id: StringName)
 signal resources_changed(village_id: StringName)
 
 ## -- production tuning --------------------------------------------------
-const FOOD_PER_WORKER_PER_SEC: float = 0.9   # per villager in "fishing" or "field"
-const WOOD_PER_WORKER_PER_SEC: float = 0.7   # per villager in "woodcutting"
+## Rebalanced when villagers stopped being a stand-in dictionary and became
+## real people whose count the economy charges upkeep for. At the old 0.9 a
+## single field hand fed eighteen people, so every village sat pinned at its
+## storage cap and no shortage could ever occur — the ledger existed but never
+## said anything. At 0.22 a village of twenty-five needs roughly six people on
+## food to break even, which is about a quarter of its adults: enough that
+## losing hands to a storm or a rebuild is felt.
+const FOOD_PER_WORKER_PER_SEC: float = 0.22  # per villager in "fishing" or "field"
+const WOOD_PER_WORKER_PER_SEC: float = 0.16  # per villager in "woodcutting"
 const STONE_PER_HEAD_PER_SEC: float = 0.04   # ambient quarrying/beachcombing, whole population
 const FOOD_PER_GATHERING_HOUSE_PER_SEC: float = 0.5
 const WORKYARD_PRODUCTION_BONUS: float = 0.25 # additive, per Workyard, applied to wood+stone
 const FOOD_UPKEEP_PER_HEAD_PER_SEC: float = 0.05
 
+## -- warmth and hunger ----------------------------------------------------
+##
+## Firewood is the second daily need, and the one that makes weather matter to
+## people rather than only to the sky. Wood is not just a build material any
+## more: a village burns it to stay warm, more of it when the night is cold,
+## and a village that runs out is a village whose woodcutters stop being
+## optional.
+##
+## COMFORT_TEMPERATURE is the point above which nothing is burnt at all.
+## Weather's baseline is 14 C swinging +/-4 C over the day, minus cloud and
+## rain, so a clear noon costs nothing and a wet night costs the most — which
+## is the seasonal rhythm the villagers' job choice reads.
+const COMFORT_TEMPERATURE_C: float = 15.0
+const WOOD_BURN_PER_HEAD_PER_SEC: float = 0.012
+## Cold below comfort is scaled by this before it multiplies the burn, so a
+## 10 C night burns about 1.4x what a 14 C evening does rather than ten times.
+const COLD_TO_BURN_SCALE: float = 0.07
+## Night costs more than the same temperature by day: people are indoors, the
+## fires are actually lit, and this is what makes a night visibly different in
+## the ledger and not only on screen.
+const NIGHT_BURN_MULTIPLIER: float = 1.6
+
+## What going without does. Both are per second, applied only while the
+## village is actually short, and deliberately small: this is meant to be
+## pressure the player can answer with a rite, not a death spiral. A village
+## that has been hungry for a minute has lost about 3 devotion and a little
+## faith, which is noticeable and recoverable.
+const HUNGER_DEVOTION_LOSS_PER_SEC: float = 0.05
+const HUNGER_FAITH_LOSS_PER_SEC: float = 0.004
+## Being cold is milder than being hungry — you can survive a cold night.
+const COLD_DEVOTION_LOSS_PER_SEC: float = 0.02
+
+## Seconds a village must go without before the Voices say anything about it.
+## Without this every village narrates a one-frame dip in the stores.
+const NEED_REMARK_DELAY: float = 6.0
+
 var _queues: Dictionary = {} # StringName -> Array[ConstructionSite]
 var _last_known_devotion: Dictionary = {} # StringName -> float
 var _applying_devotion_bonus: bool = false
 var _warned_overflow: Dictionary = {} # StringName -> {resource: bool}, one Voices line per village/resource
+## StringName -> {"hungry": float, "cold": float}: how long this village has
+## been going without, in seconds. Reset the moment the shortage ends.
+var _need_time: Dictionary = {}
+var _crowd: Node = null
+
+## Which VillagerCrowd to read job counts from. Left empty, the first one in
+## the scene is used, so a scene needs no wiring.
+@export var crowd_path: NodePath
 
 
 func _ready() -> void:
@@ -75,10 +126,17 @@ func _process(delta: float) -> void:
 ## -- production ----------------------------------------------------------
 
 func _tick_production(village: Village, delta: float) -> void:
-	var jobs: Dictionary = village.jobs
-	var fishing: int = int(jobs.get("fishing", 0))
-	var field: int = int(jobs.get("field", 0))
-	var woodcutting: int = int(jobs.get("woodcutting", 0))
+	# WHO IS ACTUALLY WORKING, not who was authored as working.
+	#
+	# `Village.jobs` is a hand-written dictionary that nothing updates at
+	# runtime — it was the economy demo's stand-in from before there were
+	# villagers on the island. The crowd knows what its six hundred people are
+	# really doing, so ask it. The dictionary stays as the fallback for the
+	# standalone economy demo, which has a village and no crowd.
+	var counts := _job_counts(village)
+	var fishing: int = counts.fishing
+	var field: int = counts.field
+	var woodcutting: int = counts.woodcutting
 
 	var structure_bonus := 1.0 + float(_count_building(village, &"workyard")) * WORKYARD_PRODUCTION_BONUS
 	if SwiftYardsWonder.is_present(village):
@@ -90,10 +148,105 @@ func _tick_production(village: Village, delta: float) -> void:
 	var stone_gain := float(village.population) * STONE_PER_HEAD_PER_SEC * structure_bonus * delta
 	var food_upkeep := float(village.population) * FOOD_UPKEEP_PER_HEAD_PER_SEC * delta
 
+	# Firewood. Cold below comfort and the night both raise the burn; a warm
+	# clear afternoon costs nothing at all.
+	var temperature: float = float(Weather.current.get("temperature_c", COMFORT_TEMPERATURE_C))
+	var cold: float = maxf(COMFORT_TEMPERATURE_C - temperature, 0.0)
+	var burn_rate: float = WOOD_BURN_PER_HEAD_PER_SEC * (1.0 + cold * COLD_TO_BURN_SCALE)
+	if bool(Weather.current.get("is_night", false)):
+		burn_rate *= NIGHT_BURN_MULTIPLIER
+	var wood_burn := float(village.population) * burn_rate * delta
+
+	# Whether the village could actually pay is decided BEFORE the stores are
+	# touched: once _apply_delta has clamped a negative delta at zero the
+	# shortfall is gone and there is nothing left to notice.
+	var had_food := Stockpile.get_amount(village, &"food")
+	var had_wood := Stockpile.get_amount(village, &"wood")
+	var hungry := had_food + food_gain < food_upkeep
+	var freezing := had_wood + wood_gain < wood_burn
+
 	_apply_delta(village, &"food", food_gain - food_upkeep)
-	_apply_delta(village, &"wood", wood_gain)
+	_apply_delta(village, &"wood", wood_gain - wood_burn)
 	_apply_delta(village, &"stone", stone_gain)
+	_tick_needs(village, delta, hungry, freezing)
 	resources_changed.emit(village.id)
+
+
+## Reads live job counts from the VillagerCrowd, falling back to the authored
+## `Village.jobs` dictionary when there is no crowd (the standalone economy
+## demo scene).
+func _job_counts(village: Village) -> Dictionary:
+	var crowd := _resolve_crowd()
+	if crowd == null:
+		var jobs: Dictionary = village.jobs
+		return {
+			"fishing": int(jobs.get("fishing", 0)),
+			"field": int(jobs.get("field", 0)),
+			"woodcutting": int(jobs.get("woodcutting", 0)),
+		}
+	return {
+		"fishing": crowd.count_job(village.id, VillagerCrowd.Job.FISHING),
+		"field": crowd.count_job(village.id, VillagerCrowd.Job.FIELD),
+		"woodcutting": crowd.count_job(village.id, VillagerCrowd.Job.WOODCUTTING),
+	}
+
+
+## What going without costs. Hunger takes devotion and a little faith; cold
+## takes devotion only. Both are gentle by design — this is pressure the
+## player answers with a rite, not a death spiral they watch happen.
+func _tick_needs(village: Village, delta: float, hungry: bool, freezing: bool) -> void:
+	var timers: Dictionary = _need_time.get(village.id, {"hungry": 0.0, "cold": 0.0})
+
+	if hungry:
+		timers.hungry += delta
+		GameState.add_devotion(village.id, -HUNGER_DEVOTION_LOSS_PER_SEC * delta)
+		village.faith_fraction = maxf(village.faith_fraction - HUNGER_FAITH_LOSS_PER_SEC * delta, 0.0)
+		if timers.hungry >= NEED_REMARK_DELAY and not timers.get("said_hungry", false):
+			timers["said_hungry"] = true
+			Voices.react(&"village_hungry", {
+				"village_id": village.id, "village_name": village.display_name,
+			})
+	else:
+		timers.hungry = 0.0
+		timers["said_hungry"] = false
+
+	if freezing:
+		timers.cold += delta
+		GameState.add_devotion(village.id, -COLD_DEVOTION_LOSS_PER_SEC * delta)
+		if timers.cold >= NEED_REMARK_DELAY and not timers.get("said_cold", false):
+			timers["said_cold"] = true
+			Voices.react(&"village_cold", {
+				"village_id": village.id, "village_name": village.display_name,
+			})
+	else:
+		timers.cold = 0.0
+		timers["said_cold"] = false
+
+	_need_time[village.id] = timers
+
+
+func _resolve_crowd() -> Node:
+	if _crowd != null and is_instance_valid(_crowd):
+		return _crowd
+	if not crowd_path.is_empty():
+		_crowd = get_node_or_null(crowd_path)
+		if _crowd != null:
+			return _crowd
+	var root := get_tree().current_scene
+	_crowd = _search_crowd(root)
+	return _crowd
+
+
+func _search_crowd(n: Node) -> Node:
+	if n == null:
+		return null
+	if n is VillagerCrowd:
+		return n
+	for child in n.get_children():
+		var found := _search_crowd(child)
+		if found != null:
+			return found
+	return null
 
 
 func _apply_delta(village: Village, resource: StringName, amount: float) -> void:
