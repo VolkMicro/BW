@@ -72,6 +72,7 @@ const _PACING_COOLDOWN_MSEC := {
 	&"village_child_born": 25000,
 	&"village_child_matured": 25000,
 	&"stockpile_overflow": 30000,
+	&"sigil_not_learned": 7000,
 	&"village_contested": 9000,
 	&"village_reclaimed": 4000,
 	&"village_hungry": 25000,
@@ -957,6 +958,23 @@ func _build_pairs() -> void:
 		_p("sj6",
 			"Failed to read. No power spent, no harm done, and the next attempt is free. That's the kindest thing this whole system does.",
 			"Free attempts! In this economy! Domovoi, is that even legal?"),
+	]
+
+	# --- Drawing a rite you have not learned (systems/sigils/) ------------
+	# sigil_not_learned: {rite_id}
+	#
+	# The shape was recognised correctly and then refused. Both Voices name
+	# what it was, so the refusal teaches rather than just failing.
+	_pairs[&"sigil_not_learned"] = [
+		_p("snl1",
+			"That shape is real, and it is not yours. Somebody wrote it down somewhere and you have not found where.",
+			"Then we STEAL it. That is how I learned everything I know."),
+		_p("snl2",
+			"You drew it correctly. Nothing happened, because nothing has taught you what it opens.",
+			"Correctly! Did you hear that? Correctly. We are so close to being competent."),
+		_p("snl3",
+			"You know the shape of that one but not the whole of it. There is a scroll for it out there.",
+			"There is always a scroll. There is never a scroll where I am standing."),
 	]
 
 	# --- The war for a taken village (systems/faith/reclaim.gd) -----------

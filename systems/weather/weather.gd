@@ -361,7 +361,10 @@ func get_active_fronts() -> Array[Dictionary]:
 ## by anything in this package; left public so other packages (e.g. N —
 ## actors/louhi, which depends on Weather per OWNERSHIP.md) can trigger a
 ## storm on demand while testing their own reactions to one.
-func debug_spawn_storm_nearby() -> void:
+## Brings a storm in over the island. Real gameplay, not a debug hook: the
+## `storm` rite calls this, because a rite that summons weather should summon
+## the weather system's weather rather than describe one in a Voices line.
+func summon_storm() -> void:
 	var spawn_angle := randf() * TAU
 	var spawn_pos := ISLAND_POS + Vector2(cos(spawn_angle), sin(spawn_angle)) * (SEA_RADIUS * 0.35)
 	var travel_bearing := WeatherFront.vector_to_bearing(ISLAND_POS - spawn_pos)
@@ -374,3 +377,9 @@ func debug_spawn_storm_nearby() -> void:
 	front.is_storm = true
 	_fronts.append(front)
 	Voices.react(&"storm_forming", {"wind_speed": front.wind_speed, "forced": true})
+
+
+## Kept as the old name for any QA panel or scripted beat that already calls
+## it. Same behaviour; the rite path uses summon_storm().
+func debug_spawn_storm_nearby() -> void:
+	summon_storm()

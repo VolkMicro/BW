@@ -56,6 +56,32 @@ at that scale, and carries 15 villages planned onto the real terrain.
 Next: Phase 2, daily life.**
 
 Done since the roadmap was written:
+- **The player can SEE the gestures now.** `ui/rite_grimoire.gd` draws every
+  rite's actual stroke — the exact point list `SigilTemplates` has held since
+  it was written — with a start dot, an arrowhead at the finish and a line
+  that brightens along its length. Direction is not decoration: the
+  recognizer is a $1-family matcher, so a circle drawn the other way does not
+  match, and a picture of the finished shape alone is not enough to reproduce
+  it. Locked rites show as dim silhouettes, because knowing a shape exists
+  and is not yours is the whole reason to hunt a scroll. Press 3.
+  The old panel described the shapes in prose and asked the player to
+  translate a sentence into a stroke.
+- **The starting kit is playable.** It was `[ward]` alone — while the
+  objective line tells the player to answer hunger with `harvest` and cold
+  with `lumber`, neither of which was theirs. Now ward + harvest + lumber:
+  one that protects, one that feeds, one that warms.
+- **The scroll gate is real.** `ScrollBook` was decoration: the caster
+  recognised and fired every rite in the game from the first second, so
+  scroll rewards meant nothing. The gate now sits AFTER recognition (the
+  shape must still be identified correctly, or an unlearned stroke would
+  silently fire the nearest learned rite) and refuses with its own Voices
+  pair.
+- **Terror rites do something to the place.** Lightning burns roof and
+  spoils stores, fire_arrow eats the woodpile, storm calls a real storm front
+  through `Weather.summon_storm()`. Throwing lightning used to raise a fear
+  number and leave the village untouched — a god whose worst act has no
+  consequences is not frightening, and the whole Mercy/Cruelty axis rests on
+  the player being able to see what cruelty costs.
 - **THE WAR GOES BOTH WAYS NOW.** A village Louhi took used to be gone for
   good — `reach.gd`'s own comment said so: "tier 2 is a one-way door". That
   is not a contest, and it meant the only ending the island could actually

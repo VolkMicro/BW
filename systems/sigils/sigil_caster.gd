@@ -157,6 +157,20 @@ func _try_recognize() -> void:
 	var score: float = result.get("score", 0.0)
 	var matched := rite_id != &"" and score >= score_threshold
 
+	# THE SCROLL GATE IS ENFORCED HERE, not just drawn in the UI.
+	#
+	# The recognizer is loaded with every template on purpose — it has to be,
+	# or an unlearned shape would silently score as the nearest learned one and
+	# the player would cast a rite they never drew. So the gate goes after
+	# recognition: the shape is identified correctly, and then refused because
+	# it is not theirs yet. Before this, `ScrollBook` was decoration — every
+	# rite in the game was castable from the first second, which made both the
+	# scroll rewards and the "not yours yet" list meaningless.
+	if matched and not ScrollBook.is_rite_unlocked(rite_id):
+		stroke_finished.emit(false, rite_id, score)
+		Voices.react(&"sigil_not_learned", {"rite_id": rite_id})
+		return
+
 	stroke_finished.emit(matched, rite_id, score)
 	if matched:
 		rite_cast.emit(rite_id, score)

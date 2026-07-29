@@ -10,6 +10,15 @@ extends Node
 ## Never run with --headless: that disables the rendering server entirely
 ## and produces a blank/failed capture (see docs/rendering.md).
 
+func _find_named(n: Node, wanted: String) -> Node:
+	if n.name == wanted:
+		return n
+	for c in n.get_children():
+		var f := _find_named(c, wanted)
+		if f != null:
+			return f
+	return null
+
 func _find_crowd(n: Node) -> Node:
 	if n is VillagerCrowd:
 		return n
@@ -76,6 +85,18 @@ func _ready() -> void:
 					crowd.count_job(v.id, VillagerCrowd.Job.FAMILY),
 					crowd.count_job(v.id, VillagerCrowd.Job.IDLE)]
 			print(line)
+
+	# SHOT_SHOW: comma-separated node names under the loaded scene to force
+	# visible before the capture. Panels bound to a keypress cannot otherwise
+	# be photographed by a harness that has no keyboard.
+	var show_spec := OS.get_environment("SHOT_SHOW")
+	if not show_spec.is_empty():
+		for wanted in show_spec.split(","):
+			var n := _find_named(self, wanted.strip_edges())
+			if n is CanvasItem:
+				(n as CanvasItem).visible = true
+		for i in range(3):
+			await get_tree().process_frame
 
 	# SHOT_CAM="x,y,z,tx,ty,tz": park the active camera at x/y/z looking at
 	# tx/ty/tz. Without it a shot is stuck with whatever the scene authored,

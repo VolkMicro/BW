@@ -1,4 +1,4 @@
-[gd_scene load_steps=26 format=3]
+[gd_scene load_steps=27 format=3]
 
 [ext_resource type="Environment" path="res://environment/world_environment.tres" id="1"]
 [ext_resource type="Script" path="res://world/god_view.gd" id="2"]
@@ -25,6 +25,7 @@
 [ext_resource type="Script" path="res://world/terrain/waterways/river_network.gd" id="22"]
 [ext_resource type="Script" path="res://actors/villagers/villager_crowd.gd" id="23"]
 [ext_resource type="Script" path="res://world/village/village_buildings.gd" id="24"]
+[ext_resource type="Script" path="res://ui/rite_grimoire.gd" id="26"]
 
 [node name="GodView" type="Node3D"]
 script = ExtResource("2")
@@ -197,21 +198,16 @@ bbcode_enabled = true
 scroll_active = false
 script = ExtResource("20")
 
-[node name="RitesLabel" type="Label" parent="UI"]
+[node name="RitesLabel" type="Control" parent="UI"]
 visible = false
 anchor_left = 1.0
 anchor_right = 1.0
-offset_left = -560.0
+offset_left = -600.0
 offset_top = 20.0
 offset_right = -24.0
-offset_bottom = 700.0
+offset_bottom = 1000.0
 grow_horizontal = 0
-theme_override_colors/font_color = Color(0.9, 0.91, 0.95, 1)
-theme_override_colors/font_outline_color = Color(0.04, 0.04, 0.06, 0.85)
-theme_override_constants/outline_size = 5
-theme_override_font_sizes/font_size = 16
-autowrap_mode = 3
-text = "RITES YOU KNOW"
+script = ExtResource("26")
 
 [node name="EndCard" type="Label" parent="UI"]
 visible = false

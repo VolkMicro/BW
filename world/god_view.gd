@@ -221,7 +221,7 @@ enum Ending { NONE, VICTORY, DIVIDED, DEFEAT }
 @onready var _graphics_preset: GraphicsPreset = $GraphicsPreset
 @onready var _help_label: Label = $UI/HelpLabel
 @onready var _objective_label: Label = $UI/ObjectiveLabel
-@onready var _rites_label: Label = $UI/RitesLabel
+@onready var _rites_label: RiteGrimoire = $UI/RitesLabel
 @onready var _end_card: Label = $UI/EndCard
 @onready var _voice_log: VoiceLog = $UI/VoiceLog
 
@@ -717,6 +717,7 @@ func _on_rite_cast(rite_id: StringName, confidence: float) -> void:
 		_deliver_rite_goods(target, rite_id, quality)
 	elif TERROR_RITE_AMOUNT.has(rite_id):
 		Reach.convert_via_terror(target.id, float(TERROR_RITE_AMOUNT[rite_id]) * quality)
+		_deliver_rite_harm(target, rite_id, quality)
 	# Any other recognized rite id has no conversion meaning; the VFX and the
 	# campaign's notify_rite_cast() still fire. There are none today — the
 	# two tables cover all nine SigilTemplates ids.
@@ -749,6 +750,57 @@ func _deliver_rite_goods(v: Village, rite_id: StringName, quality: float) -> voi
 	var goods: Dictionary = RITE_GOODS.get(rite_id, {})
 	for resource in goods:
 		Stockpile.add(v, resource, float(goods[resource]) * quality)
+
+
+## WHAT A TERROR RITE ACTUALLY DOES TO A PLACE.
+##
+## The mirror of the harvest problem, and worse, because terror is the half of
+## the game that is supposed to feel like a mistake you can make. Throwing
+## lightning at a village used to raise a fear number and leave the village
+## untouched — no fire, no damage, nothing anyone would have to clean up. A
+## god whose worst act has no consequences is not frightening, they are
+## ignorable, and the whole Mercy/Cruelty axis rests on the player being able
+## to see what cruelty costs.
+##
+## The costs are deliberately asymmetric with the gifts. A harvest fills a
+## granary; lightning burns down part of the roof AND spoils stores, so the
+## village you frightened into believing is a poorer village afterwards, and
+## the fear you bought has to be paid for by somebody. Reach's terror ceiling
+## (0.85) already stops fear alone from converting anyone — this is why that
+## rule bites: keep going and there is nothing left worth converting.
+const RITE_HARM: Dictionary = {
+	&"lightning": {"sanctum": 14.0, "food": -10.0},
+	&"fire_arrow": {"sanctum": 9.0, "wood": -18.0},   # timber burns first
+	&"storm": {"sanctum": 6.0, "food": -16.0, "wood": -8.0},
+}
+
+func _deliver_rite_harm(v: Village, rite_id: StringName, quality: float) -> void:
+	var harm: Dictionary = RITE_HARM.get(rite_id, {})
+	for key in harm:
+		var amount: float = float(harm[key]) * quality
+		if key == "sanctum":
+			var sanctum := _sanctum_for(v.id)
+			if sanctum != null:
+				sanctum.apply_damage(amount, self)
+			else:
+				# No Sanctum node for this village (nothing should be in this
+				# state, but a missing node must not silently swallow the
+				# damage): take it off the number the Sanctum would have.
+				v.sanctum_hp = maxf(0.0, v.sanctum_hp - amount)
+		else:
+			Stockpile.add(v, StringName(key), amount)
+	# A storm is a storm. The weather system already knows how to run one over
+	# the island, and a rite that summons weather should summon weather rather
+	# than describing it in a Voices line.
+	if rite_id == &"storm":
+		Weather.summon_storm()
+
+
+func _sanctum_for(village_id: StringName) -> Sanctum:
+	for s in _sanctums:
+		if s != null and is_instance_valid(s) and s.village_id == village_id:
+			return s
+	return null
 
 
 ## One rite cast at a village Louhi holds.
@@ -1105,18 +1157,12 @@ func _current_quest_title(target: Village) -> String:
 ## already carries a one-sentence English description of every shape — they
 ## had simply never been shown to anybody. Toggled with 3, hidden by default,
 ## because a permanently-open list is a HUD and this game does not have one.
+## The panel draws the actual stroke for every rite now (ui/rite_grimoire.gd),
+## so this only has to tell it which ids are terror — the panel deliberately
+## does not know this file's rite tables.
 func _refresh_rites_label() -> void:
-	var known: Array[StringName] = ScrollBook.known_rite_ids()
-	var lines: PackedStringArray = PackedStringArray()
-	lines.append("RITES YOU KNOW")
-	for rite_id in known:
-		var desc: String = String(SigilTemplates.DESCRIPTIONS.get(rite_id, "A shape nobody wrote down."))
-		var kind := "gift"
-		if TERROR_RITE_AMOUNT.has(rite_id):
-			kind = "terror"
-		lines.append("\n%s  (%s)\n%s" % [String(rite_id).replace("_", " "), kind, desc])
-	lines.append("\nScrolls for the rest are quest rewards.")
-	_rites_label.text = "\n".join(lines)
+	_rites_label.terror_rites = TERROR_RITE_AMOUNT
+	_rites_label.refresh()
 
 
 # ---------------------------------------------------------------------------

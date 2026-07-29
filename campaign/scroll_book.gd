@@ -35,7 +35,19 @@ extends RefCounted
 ## first ask of a new, unproven god is protection, not weather control or
 ## war. The other eight are discovered over the course of the campaign
 ## (see campaign/quest_catalog.gd's reward_scrolls).
-const DEFAULT_KNOWN_RITES: Array[StringName] = [&"ward"]
+## The kit a god wakes up with.
+##
+## Was `[&"ward"]` alone, which made the opening unplayable in a way that took
+## a rendered screenshot of the rite panel to see: the objective line tells
+## the player to answer a hungry village with `harvest` and a cold one with
+## `lumber`, and neither was theirs to cast. A single warding circle cannot
+## feed anyone, cannot warm anyone, and converts almost nobody — so the first
+## thing the player was asked to do was the one thing they could not do.
+##
+## Three rites: one that feeds, one that warms, one that protects. Enough to
+## play the loop the HUD describes, few enough that the other six are still
+## worth hunting scrolls for.
+const DEFAULT_KNOWN_RITES: Array[StringName] = [&"ward", &"harvest", &"lumber"]
 
 ## True if `rite_id` is either a default-known rite or already present in
 ## `GameState.scrolls_known`. An id `SigilTemplates` doesn't recognize at all
