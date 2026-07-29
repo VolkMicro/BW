@@ -297,9 +297,19 @@ func _build_far_sea() -> void:
 # this registration), real spawned Villagers, one Calling Stone each.
 # ---------------------------------------------------------------------------
 func _place_villages_and_villagers() -> void:
+	var taken: Array[Vector2] = []
 	for entry in VILLAGE_DEFS:
 		var anchor: Node3D = get_node(entry.anchor)
-		var xz := Vector2(anchor.position.x, anchor.position.z)
+		# The authored X/Z is a WISH, not a position. Since the island became a
+		# lobed, domain-warped landmass (island_generator.gd's _land_mask) its
+		# coastline is different for every seed, so a hard-coded anchor can
+		# easily land in the sea or on a cliff. _find_village_site() keeps the
+		# authored spot when it is good and otherwise spirals outward for the
+		# nearest place a village could actually stand.
+		var xz := _find_village_site(Vector2(anchor.position.x, anchor.position.z), taken)
+		taken.append(xz)
+		anchor.position.x = xz.x
+		anchor.position.z = xz.y
 
 		var v := Village.new()
 		v.id = entry.id
@@ -331,6 +341,60 @@ func _place_villages_and_villagers() -> void:
 		_spawn_villagers(entry.id, anchor)
 		_spawn_calling_stone(entry.id, anchor)
 
+
+## Minimum height a village will settle at — above the surf, not on a beach
+## that the shoreline foam is already washing over.
+const VILLAGE_MIN_HEIGHT := 3.0
+## Villages need reasonably level ground; this is the largest height spread
+## tolerated across a site's footprint.
+const VILLAGE_MAX_RELIEF := 5.0
+## Roughly the Sanctum's worship-yard radius, so "level" is measured over the
+## area a village actually occupies rather than at a single point.
+const VILLAGE_FOOTPRINT := 11.0
+const VILLAGE_MIN_SEPARATION := 55.0
+
+## Returns a spot near `wish` where a village can actually stand: above the
+## waterline, level enough, and clear of the villages already placed. Spirals
+## outward from the wish, so an authored layout is preserved when the terrain
+## allows it and only nudged when it does not.
+func _find_village_site(wish: Vector2, taken: Array[Vector2]) -> Vector2:
+	if _site_ok(wish, taken):
+		return wish
+	var half: float = float(_island.size_meters) * 0.5
+	# Spiral out in rings. 24 samples per ring is enough to not miss a valley
+	# mouth, and the ring step is a little under the footprint so nothing is
+	# skipped between rings.
+	var radius := 8.0
+	while radius < half:
+		for i in 24:
+			var a := TAU * float(i) / 24.0
+			var candidate := wish + Vector2(cos(a), sin(a)) * radius
+			if absf(candidate.x) > half or absf(candidate.y) > half:
+				continue
+			if _site_ok(candidate, taken):
+				return candidate
+		radius += 9.0
+	# Nowhere suitable at all. Return the wish rather than silently teleporting
+	# the village to the middle of the map — a village visibly in the surf is a
+	# bug someone will notice and fix, a village mysteriously relocated is not.
+	push_warning("god_view: no valid village site near %s; leaving it where it was asked for." % wish)
+	return wish
+
+func _site_ok(xz: Vector2, taken: Array[Vector2]) -> bool:
+	for t in taken:
+		if t.distance_to(xz) < VILLAGE_MIN_SEPARATION:
+			return false
+	var centre: float = _island.sample_height(xz)
+	if centre < VILLAGE_MIN_HEIGHT:
+		return false
+	var lo := centre
+	var hi := centre
+	for i in 8:
+		var a := TAU * float(i) / 8.0
+		var h: float = _island.sample_height(xz + Vector2(cos(a), sin(a)) * VILLAGE_FOOTPRINT)
+		lo = minf(lo, h)
+		hi = maxf(hi, h)
+	return (hi - lo) <= VILLAGE_MAX_RELIEF
 
 func _spawn_villagers(village_id: StringName, anchor: Node3D) -> void:
 	var root: Node3D = anchor.get_node("Villagers")
