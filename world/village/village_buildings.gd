@@ -74,24 +74,47 @@ func build() -> void:
 # Dwellings
 # ---------------------------------------------------------------------------
 
+## The dwelling models. Real CC0 art (Quaternius, Medieval Village Pack) rather
+## than the procedural box this used to build: at village-level zoom the
+## procedural houses read as brown wedges, and a player looking at them said
+## so. Credits in docs/systems/village_buildings.md; licence text ships beside
+## the models in assets/models/village/License.txt.
+##
+## One MultiMesh PER MODEL, not per building: four types means four draw calls
+## for every dwelling on the island, however many villages there are. The
+## models carry their own materials (untextured, flat-coloured — which is
+## exactly right for this hardware), so nothing here sets material_override:
+## doing so would collapse every surface of the model onto one material and
+## throw the roof/plaster/stone colours away.
+const HOUSE_MODELS := [
+	"res://assets/models/village/House_1.obj",
+	"res://assets/models/village/House_2.obj",
+	"res://assets/models/village/House_3.obj",
+	"res://assets/models/village/House_4.obj",
+]
+
+## One of these is placed per village as a landmark, so villages are not just
+## a ring of identical huts. Deliberately few — these are the heavier meshes.
+## Mill, Stable and Sawmill are NOT here. All three reproducibly crashed
+## Godot 4.3's OBJ importer (SIGABRT during --import, three runs), while the
+## six kept below import cleanly. Rather than ship an asset that aborts the
+## importer, they were removed from the repository entirely — a broken import
+## is the kind of thing that wastes an hour for whoever next clones this.
+const LANDMARK_MODELS := [
+	"res://assets/models/village/Blacksmith.obj",
+	"res://assets/models/village/Inn.obj",
+]
+
 func _build_houses() -> void:
-	# Every house shares one mesh, so per-house variety comes from the
-	# transform (yaw, slight scale) and the instance colour rather than from
-	# separate meshes — that is what keeps this to a single draw call.
-	var mesh := VillageArch.build_house(_rng)
+	# Bucket the placements by model so each model gets exactly one MultiMesh.
+	var buckets: Array = []
+	for _i in HOUSE_MODELS.size():
+		buckets.append([] as Array[Transform3D])
 	var placed: Array[Vector3] = []
+	var landmark_i := 0
 
 	for v in GameState.villages.values():
 		var centre: Vector2 = v.position_on_island
-		var culture: Culture = GameState.cultures.get(v.culture_id)
-		var tint := Color(1, 1, 1)
-		if culture:
-			# Lift the culture colour well toward white: it is multiplied into
-			# already-dark timber vertex colours, and the authored primaries
-			# are near-black (Fenrayt's is 0.106, 0.114, 0.098). Used raw, every
-			# house came out a black smudge.
-			tint = culture.color_primary.lerp(Color(1, 1, 1), 0.72)
-
 		var made := 0
 		var attempts := 0
 		while made < houses_per_village and attempts < houses_per_village * 25:
@@ -111,27 +134,65 @@ func _build_houses() -> void:
 				continue
 			placed.append(pos)
 			made += 1
-			_house_transforms.append(Transform3D(
-				Basis(Vector3.UP, _rng.randf() * TAU).scaled(Vector3.ONE * _rng.randf_range(0.92, 1.12)),
-				pos))
-			_house_colors.append(tint)
+			# Face roughly toward the Sanctum, with slack — a village whose
+			# doors all point at its temple reads as a settlement around
+			# something, which is what it is. Fully random yaw reads as debris.
+			var toward := (centre - xz).angle() + _rng.randf_range(-0.9, 0.9)
+			var b := Basis(Vector3.UP, toward).scaled(Vector3.ONE * _rng.randf_range(0.95, 1.25))
+			buckets[_rng.randi() % HOUSE_MODELS.size()].append(Transform3D(b, pos))
 
-	if _house_transforms.is_empty():
+		_place_landmark(centre, placed, landmark_i)
+		landmark_i += 1
+
+	for i in HOUSE_MODELS.size():
+		var xforms: Array = buckets[i]
+		if xforms.is_empty():
+			continue
+		var mesh: Mesh = _load_building(HOUSE_MODELS[i])
+		if mesh == null:
+			push_warning("VillageBuildings: could not load %s" % HOUSE_MODELS[i])
+			continue
+		var mm := MultiMesh.new()
+		mm.transform_format = MultiMesh.TRANSFORM_3D
+		mm.mesh = mesh
+		mm.instance_count = xforms.size()
+		for k in xforms.size():
+			mm.set_instance_transform(k, xforms[k])
+		var node := MultiMeshInstance3D.new()
+		node.name = "Dwellings%d" % (i + 1)
+		node.multimesh = mm
+		node.visibility_range_end = house_visibility_range_end
+		add_child(node)
+
+## A single larger building per village, placed just outside the house ring.
+func _place_landmark(centre: Vector2, placed: Array[Vector3], index: int) -> void:
+	var path: String = LANDMARK_MODELS[index % LANDMARK_MODELS.size()]
+	var mesh: Mesh = _load_building(path)
+	if mesh == null:
 		return
-	var mm := MultiMesh.new()
-	mm.transform_format = MultiMesh.TRANSFORM_3D
-	mm.use_colors = true
-	mm.mesh = mesh
-	mm.instance_count = _house_transforms.size()
-	for i in _house_transforms.size():
-		mm.set_instance_transform(i, _house_transforms[i])
-		mm.set_instance_color(i, _house_colors[i])
-	_houses = MultiMeshInstance3D.new()
-	_houses.name = "Dwellings"
-	_houses.multimesh = mm
-	_houses.visibility_range_end = house_visibility_range_end
-	_houses.material_override = _building_material()
-	add_child(_houses)
+	for _try in 40:
+		var a := _rng.randf() * TAU
+		var r := _rng.randf_range(house_ring_outer * 0.75, house_ring_outer * 1.25)
+		var xz := centre + Vector2(cos(a), sin(a)) * r
+		if not _buildable(xz):
+			continue
+		var pos := Vector3(xz.x, _height(xz), xz.y)
+		var clear := true
+		for p in placed:
+			if p.distance_to(pos) < house_min_gap * 1.6:
+				clear = false
+				break
+		if not clear:
+			continue
+		var mi := MeshInstance3D.new()
+		mi.name = "Landmark_%s" % path.get_file().get_basename()
+		mi.mesh = mesh
+		mi.visibility_range_end = house_visibility_range_end
+		add_child(mi)
+		mi.global_position = pos
+		mi.rotation.y = (centre - xz).angle() + _rng.randf_range(-0.5, 0.5)
+		placed.append(pos)
+		return
 
 var _house_transforms: Array[Transform3D] = []
 var _house_colors: Array[Color] = []
@@ -192,6 +253,44 @@ func _find_sanctums(node: Node, out: Array[Node] = []) -> Array[Node]:
 	return out
 
 # ---------------------------------------------------------------------------
+
+## Loads a building model and lifts its materials into the visible range.
+##
+## The .mtl files carry LINEAR diffuse values straight out of Blender —
+## House_1's nine surfaces measure 0.343, 0.122, 0.308, 0.028, 0.213, 0.124,
+## 0.078, 0.015, 0.177. Godot imports those as albedo unchanged, which is
+## technically faithful and visually useless: under this project's deliberately
+## low exposure (tonemap_exposure 0.52, chosen so the ocean does not blow out)
+## every house rendered as a black silhouette. Verified by reading the imported
+## materials, not by guessing.
+##
+## Raising each channel by ^(1/2.2) recovers roughly the value the artist saw
+## in Blender's own viewport — 0.028 becomes 0.19, 0.343 becomes 0.61 — which
+## is what "looks like the model" means in practice.
+##
+## Materials are duplicated before editing: the imported Mesh is a shared
+## resource, so mutating it in place would write through Godot's resource cache
+## and silently affect anything else that loads the same model.
+var _model_cache: Dictionary = {}
+
+func _load_building(path: String) -> Mesh:
+	if _model_cache.has(path):
+		return _model_cache[path]
+	var mesh: Mesh = load(path)
+	if mesh == null:
+		push_warning("VillageBuildings: could not load %s" % path)
+		return null
+	for i in mesh.get_surface_count():
+		var mat = mesh.surface_get_material(i)
+		if mat is StandardMaterial3D:
+			var m: StandardMaterial3D = mat.duplicate()
+			var c: Color = m.albedo_color
+			m.albedo_color = Color(pow(c.r, 1.0 / 2.2), pow(c.g, 1.0 / 2.2), pow(c.b, 1.0 / 2.2), c.a)
+			m.roughness = 0.9
+			m.metallic = 0.0
+			mesh.surface_set_material(i, m)
+	_model_cache[path] = mesh
+	return mesh
 
 ## Vertex colours carry the timber/shingle shading, and the MultiMesh instance
 ## colour carries the culture tint, so one material serves every building.
