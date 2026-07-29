@@ -177,9 +177,35 @@ func _process(delta: float) -> void:
 		if _cold_front_elapsed >= cold_front_duration_sec:
 			_revert_cold_front()
 
-	if _eval_elapsed >= evaluation_interval_sec:
+	if _eval_elapsed >= _current_evaluation_interval():
 		_eval_elapsed = 0.0
 		_evaluate()
+
+
+## SHE GETS FASTER AS SHE WINS.
+##
+## The design ends with one god left, which means both sides have to compound:
+## every village a god holds should make the next one easier to take. The
+## player's half of that already exists — devotion feeds the Avatar, and Reach
+## grows with converts — but Louhi ran on a fixed 75-second clock whether she
+## held nothing or held twelve villages, so her side of the war had no slope
+## at all and a bad position was never actually dangerous.
+##
+## Each village she holds cuts the interval, down to a floor. At eight
+## villages she is acting roughly twice as often as at the start, which is the
+## point where a player who has been ignoring her starts losing the island in
+## front of them rather than at their leisure.
+const EVAL_INTERVAL_FLOOR_SEC := 26.0
+const EVAL_SPEEDUP_PER_VILLAGE := 0.085
+
+func _current_evaluation_interval() -> float:
+	var held := 0
+	for value in GameState.villages.values():
+		var v: Village = value
+		if v.loyal_to_rival:
+			held += 1
+	var factor: float = maxf(1.0 - float(held) * EVAL_SPEEDUP_PER_VILLAGE, 0.25)
+	return maxf(evaluation_interval_sec * factor, EVAL_INTERVAL_FLOOR_SEC)
 
 
 func _evaluate() -> void:

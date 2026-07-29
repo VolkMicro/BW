@@ -56,6 +56,25 @@ at that scale, and carries 15 villages planned onto the real terrain.
 Next: Phase 2, daily life.**
 
 Done since the roadmap was written:
+- **THE WAR GOES BOTH WAYS NOW.** A village Louhi took used to be gone for
+  good — `reach.gd`'s own comment said so: "tier 2 is a one-way door". That
+  is not a contest, and it meant the only ending the island could actually
+  reach was hers. `systems/faith/reclaim.gd` is the other direction: a rite
+  cast over a village she holds pries at her GRIP, which is a separate number
+  from faith on purpose — nobody in a taken village is listening to you, so
+  you are not persuading them, you are prying her fingers loose. Ten clean
+  rites break it. What comes back returns at 0.18 faith, not the number it
+  left with, and pays 12 devotion for the trouble.
+  It also lives outside `reach.gd` deliberately: that file is package J's and
+  the netcode carries a mirrored copy, so a rule bolted in there has to be
+  right in two places.
+  Covered by `tests/reclaim_test.tscn` (a scene, not a `--script` run —
+  autoloads do not exist when a custom SceneTree replaces the main loop).
+  Run: `godot --headless --path . tests/reclaim_test.tscn`.
+- **Louhi compounds.** She ran on a fixed 75-second clock whether she held
+  nothing or held twelve villages, so her side of the war had no slope and a
+  bad position was never actually dangerous. Each village she holds shortens
+  her interval, down to a 26 s floor.
 - **PHASE 2 STARTED: villagers have needs, and the ledger answers them.**
   Food and firewood are consumed every tick; a cold night burns more wood
   than a warm afternoon; a village that runs short loses devotion and a

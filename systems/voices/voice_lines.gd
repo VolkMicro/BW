@@ -72,6 +72,8 @@ const _PACING_COOLDOWN_MSEC := {
 	&"village_child_born": 25000,
 	&"village_child_matured": 25000,
 	&"stockpile_overflow": 30000,
+	&"village_contested": 9000,
+	&"village_reclaimed": 4000,
 	&"village_hungry": 25000,
 	&"village_cold": 25000,
 	&"construction_started": 12000,
@@ -955,6 +957,32 @@ func _build_pairs() -> void:
 		_p("sj6",
 			"Failed to read. No power spent, no harm done, and the next attempt is free. That's the kindest thing this whole system does.",
 			"Free attempts! In this economy! Domovoi, is that even legal?"),
+	]
+
+	# --- The war for a taken village (systems/faith/reclaim.gd) -----------
+	# village_contested: {village_id, village_name, grip}
+	# village_reclaimed: {village_id, village_name}
+	_pairs[&"village_contested"] = [
+		_p("vct1",
+			"Something gave in {village} just then. Not much. She felt it.",
+			"Oh, do it again. I want to know what she sounds like when she is annoyed."),
+		_p("vct2",
+			"{village} is still hers, but less of it than this morning.",
+			"Less of it! That is my favourite kind of victory. Small and extremely irritating."),
+		_p("vct3",
+			"They cannot hear you in {village} yet. You are not talking to them — you are talking to her.",
+			"Then talk LOUDER."),
+	]
+	_pairs[&"village_reclaimed"] = [
+		_p("vrc1",
+			"{village} is out from under her. They do not love you for it. They will need reasons, same as anyone.",
+			"They are ALIVE and they are OURS and you want to discuss reasons."),
+		_p("vrc2",
+			"Her hold on {village} is broken. That is one fewer place she can stand.",
+			"One fewer! Domovoi, at this rate she will be standing in the sea by winter."),
+		_p("vrc3",
+			"{village} came back. Whatever she told them there, they have stopped repeating it.",
+			"I would love to know what she told them. For research. Purely for research."),
 	]
 
 	# --- Economy: daily needs (systems/economy/village_economy.gd) --------

@@ -667,6 +667,19 @@ func _on_rite_cast(rite_id: StringName, confidence: float) -> void:
 	var world_pos: Vector3 = _hand.get_target_position()
 	var target: Village = _village_in_reach_of(world_pos)
 
+	# CONTESTING A VILLAGE LOUHI HOLDS.
+	#
+	# _village_in_reach_of() skips those on purpose — Reach's radius for them
+	# is 0, which is what her holding them means. Before this they could only
+	# be looked at. A rite cast over one now pries at her grip instead of
+	# persuading anybody, because nobody there is listening; see
+	# systems/faith/reclaim.gd for why grip and faith must not share a number.
+	if target == null:
+		var taken: Village = Reclaim.contested_village_at(world_pos)
+		if taken != null:
+			_contest_rite(taken, rite_id, confidence, world_pos)
+			return
+
 	if target == null:
 		# Refused: the Hand flashes (actors/hand/hand.gd:194) and the Voices
 		# explain jurisdiction. This is the single most important teaching
@@ -731,6 +744,25 @@ func _deliver_rite_goods(v: Village, rite_id: StringName, quality: float) -> voi
 	var goods: Dictionary = RITE_GOODS.get(rite_id, {})
 	for resource in goods:
 		Stockpile.add(v, resource, float(goods[resource]) * quality)
+
+
+## One rite cast at a village Louhi holds.
+##
+## Any rite works, help or terror: prying her loose is not persuasion and does
+## not care whether the player is being kind about it. What it costs is
+## repetition — nine or ten clean rites while she is busy elsewhere.
+func _contest_rite(v: Village, rite_id: StringName, confidence: float, world_pos: Vector3) -> void:
+	var quality := 0.5 + 0.5 * clampf(confidence, 0.0, 1.0)
+	var amount: float = float(HELP_RITE_AMOUNT.get(rite_id,
+		TERROR_RITE_AMOUNT.get(rite_id, 4.0)))
+	RiteVFX.spawn(rite_id, world_pos, self)
+	var result := Reclaim.press(v, amount * quality)
+	if not result.released:
+		Voices.react(&"village_contested", {
+			"village_id": v.id, "village_name": v.display_name,
+			"grip": result.grip,
+		})
+	_refresh_objective()
 
 
 ## See CONVERSION_TIPPING_POINT. Emits through GameState.set_faith_fraction()
@@ -1015,6 +1047,8 @@ func _build_objective_text() -> String:
 			hungry += 1
 		if Stockpile.get_amount(v, &"wood") <= NEED_WARNING_LEVEL:
 			cold += 1
+	if lost > 0:
+		lines.append("Pohjola holds %d. A rite cast over one pries her grip loose — it takes several." % lost)
 	if hungry > 0 or cold > 0:
 		var parts: PackedStringArray = PackedStringArray()
 		if hungry > 0:
