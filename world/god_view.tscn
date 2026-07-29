@@ -38,7 +38,7 @@ shadow_enabled = true
 directional_shadow_mode = 0
 
 [node name="GodViewMarker" type="Marker3D" parent="."]
-transform = Transform3D(1, 0, 0, 0, 0.82, 0.57, 0, -0.57, 0.82, 0, 130, 220)
+transform = Transform3D(1, 0, 0, 0, 0.87, 0.5, 0, -0.5, 0.87, 0, 95, 165)
 
 [node name="CameraRig" parent="." instance=ExtResource("7")]
 

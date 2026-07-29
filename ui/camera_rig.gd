@@ -75,12 +75,27 @@ const INTERIOR_HALF_EXTENT := 3.1 # the ~6.2m x/z interior square, half-width
 ## -- God-view free camera (pan / zoom / orbit) --------------------------
 @export var god_pan_speed: float = 55.0 ## m/s, ground-plane pan
 @export var god_zoom_speed: float = 90.0 ## m per wheel notch, roughly
-@export var god_min_distance: float = 25.0
-@export var god_max_distance: float = 420.0
+## Closest the god view comes to its focus point. At this range one villager,
+## the yard they are working in and the smoke off the hearth are all legible —
+## the "come down and watch a person" end of the brief's colossal-scale swing.
+@export var god_min_distance: float = 30.0
+## Furthest. Deliberately NOT "far enough to see the whole island": the owner's
+## requirement is that maximum zoom-out shows roughly 70% of the island, so
+## there is always somewhere off-frame, and the world never shrinks to a coin
+## on a table. _frame_island_fraction() below derives this from the island's
+## real size rather than leaving it a magic number that silently stops
+## matching when the island grows.
+@export var god_max_distance: float = 300.0
+## Fraction of the island's width that should fill the frame at maximum
+## zoom-out. 1.0 would frame the whole thing; 0.7 keeps the world bigger than
+## the screen.
+@export_range(0.3, 1.0) var god_max_view_fraction: float = 0.7
 @export var god_rotate_sensitivity: float = 0.006 ## radians per pixel of middle-drag
 @export var god_min_pitch_deg: float = 12.0 ## can't rotate to looking dead level
 @export var god_max_pitch_deg: float = 82.0 ## can't rotate to looking straight down
-const GOD_PAN_BOUNDS := 380.0 ## loose clamp so panning can't fly off the (800m) ocean plane forever
+## Loose clamp so panning cannot wander off into empty ocean forever. Derived
+## from the island at _ready() when one can be found — see _fit_to_island().
+var _pan_bounds: float = 380.0
 
 @onready var camera: Camera3D = $Camera3D
 @onready var _player_proxy: AnimatableBody3D = $PlayerProxy
@@ -92,11 +107,49 @@ var _interior_bounds_node: Node3D = null # local-space reference for the walk cl
 var _god_focus: Vector3 = Vector3.ZERO
 var _god_yaw: float = 0.0
 var _god_pitch: float = deg_to_rad(35.0)
-var _god_distance: float = 200.0
+var _god_distance: float = 160.0
 var _god_orbiting: bool = false
 
 func _ready() -> void:
 	camera.current = true
+	_fit_to_island()
+
+## Ties the zoom-out limit and the pan clamp to the island's actual size, so
+## they keep meaning the same thing when the island grows (Phase 1 takes it
+## from 320 m to ~1200 m). Without this both are magic numbers that quietly
+## stop matching the world.
+##
+## The distance that frames a given width is width / (2 * tan(fov/2)); Godot's
+## `fov` is the VERTICAL angle, and the view is wider than it is tall, so
+## framing by width through the vertical FOV leaves margin rather than
+## cropping — which is the safe direction to be wrong in.
+func _fit_to_island() -> void:
+	var island := _find_island()
+	if island == null:
+		return
+	var size := float(island.get("size_meters"))
+	if size <= 0.0:
+		return
+	var want := size * god_max_view_fraction
+	var half_fov := deg_to_rad(camera.fov) * 0.5
+	god_max_distance = want / (2.0 * tan(half_fov))
+	_god_distance = clampf(_god_distance, god_min_distance, god_max_distance)
+	_pan_bounds = size * 0.6
+
+func _find_island() -> Node:
+	var tree := get_tree()
+	if tree == null or tree.current_scene == null:
+		return null
+	return _search_island(tree.current_scene)
+
+func _search_island(n: Node) -> Node:
+	if n != self and n.has_method("sample_height") and n.get("size_meters") != null:
+		return n
+	for c in n.get_children():
+		var found := _search_island(c)
+		if found != null:
+			return found
+	return null
 
 func _physics_process(delta: float) -> void:
 	if mode == MODE_SANCTUM_INTERIOR:
@@ -127,8 +180,8 @@ func _process_god_view_free_camera(delta: float) -> void:
 		var fwd := Vector2(sin(_god_yaw), cos(_god_yaw))
 		var right := Vector2(fwd.y, -fwd.x)
 		var delta_xz := right * move.x + fwd * move.y
-		_god_focus.x = clampf(_god_focus.x + delta_xz.x, -GOD_PAN_BOUNDS, GOD_PAN_BOUNDS)
-		_god_focus.z = clampf(_god_focus.z + delta_xz.y, -GOD_PAN_BOUNDS, GOD_PAN_BOUNDS)
+		_god_focus.x = clampf(_god_focus.x + delta_xz.x, -_pan_bounds, _pan_bounds)
+		_god_focus.z = clampf(_god_focus.z + delta_xz.y, -_pan_bounds, _pan_bounds)
 	_apply_god_view_orbit()
 
 ## Rebuilds camera.global_transform from the current focus/yaw/pitch/distance

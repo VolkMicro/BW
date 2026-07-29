@@ -51,7 +51,23 @@ before inventing any name.
 
 *Update this section every commit.*
 
-**Status: Phase 1 not started. Everything below §3 is design, not code.**
+**Status: Phase 1 started — §7 island shape and part of 1e (camera) are done.
+The big item, 1a (villagers off the scene graph), is NOT started.**
+
+Done since the roadmap was written:
+- Island is no longer a dome: lobed elliptical falloff centres plus a
+  domain-warped coastline, so each seed is a different landmass with
+  headlands and bays (§7 items 1 and 2). Items 3 (inland lakes) and 4
+  (cliffs) remain.
+- Villages find their own ground. The authored X/Z is now a wish; the
+  village settles on the nearest spot above the surf, level across the
+  Sanctum footprint, and clear of its neighbours. Warns rather than
+  silently teleporting when no site exists.
+- Camera zoom is tied to the island instead of magic numbers:
+  `god_max_view_fraction` (0.7) derives the zoom-out limit from
+  `size_meters` and the vertical FOV, so it keeps meaning "70% of the
+  island" when the island grows to 1200 m. Closest zoom is 30 m — one
+  villager and their yard legible.
 
 What genuinely works right now:
 
