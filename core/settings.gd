@@ -32,6 +32,14 @@ var graphics_preset: int = 0        # GraphicsPreset.Preset: 0 Low, 1 Medium, 2 
 var master_volume: float = 0.8      # 0..1, mapped to dB on the Master bus
 var music_volume: float = 0.7
 var fullscreen: bool = false
+## 0 = the beds synthesised for this island by tools/synth_audio.py,
+## 1 = a sourced CC0 track (OpenGameArt, "Medieval Exploration").
+##
+## A choice rather than a decision made for the player: the synthesised bed is
+## tuned to this game and the sourced one is a real recorded arrangement, and
+## which of those somebody wants behind forty minutes of strategy is taste,
+## not correctness. Nobody here can hear either of them to judge.
+var music_track: int = 0
 
 var _config := ConfigFile.new()
 
@@ -52,6 +60,7 @@ func load_settings() -> void:
 	fullscreen = bool(_config.get_value("video", "fullscreen", fullscreen))
 	master_volume = float(_config.get_value("audio", "master", master_volume))
 	music_volume = float(_config.get_value("audio", "music", music_volume))
+	music_track = int(_config.get_value("audio", "track", music_track))
 
 
 func save_settings() -> void:
@@ -60,6 +69,7 @@ func save_settings() -> void:
 	_config.set_value("video", "fullscreen", fullscreen)
 	_config.set_value("audio", "master", master_volume)
 	_config.set_value("audio", "music", music_volume)
+	_config.set_value("audio", "track", music_track)
 	_config.save(CONFIG_PATH)
 
 
@@ -100,6 +110,15 @@ func set_music_volume(value: float) -> void:
 	_apply_volume()
 	save_settings()
 	changed.emit()
+
+
+func set_music_track(value: int) -> void:
+	music_track = clampi(value, 0, 1)
+	save_settings()
+	changed.emit()
+	# MusicDirector rebuilds its layers when it hears this.
+	if has_node("/root/MusicDirector") and MusicDirector.has_method("reload_music"):
+		MusicDirector.reload_music()
 
 
 func set_fullscreen(value: bool) -> void:

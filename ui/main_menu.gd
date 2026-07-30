@@ -170,6 +170,22 @@ func _build_settings() -> Control:
 	_add_slider(box, &"music", Settings.music_volume,
 		func(v: float) -> void: Settings.set_music_volume(v))
 
+	# Which music. Two genuinely different things and nobody here can hear
+	# either of them, so it is the player's ear that decides.
+	_labels[&"music_track"] = _heading(box, 15)
+	var track_row := HBoxContainer.new()
+	track_row.add_theme_constant_override("separation", 8)
+	box.add_child(track_row)
+	for i in 2:
+		var b := Button.new()
+		b.toggle_mode = true
+		b.custom_minimum_size = Vector2(245, 36)
+		b.pressed.connect(func() -> void:
+			Settings.set_music_track(i)
+			_retranslate())
+		track_row.add_child(b)
+		_buttons[StringName("track_%d" % i)] = b
+
 	box.add_child(_spacer(10))
 	_add_button(box, &"back", func() -> void: _settings_panel.visible = false)
 	return dim
@@ -221,6 +237,11 @@ func _retranslate() -> void:
 	_buttons[&"back"].text = tr("Back")
 	_buttons[&"fullscreen"].text = tr("Fullscreen")
 
+	_labels[&"music_track"].text = tr("Music track")
+	for i in 2:
+		var tb: Button = _buttons[StringName("track_%d" % i)]
+		tb.text = [tr("Written for this island"), tr("Medieval Exploration (CC0)")][i]
+		tb.button_pressed = Settings.music_track == i
 	for i in 3:
 		var b: Button = _buttons[StringName("preset_%d" % i)]
 		b.text = [tr("Low"), tr("Medium"), tr("High")][i]

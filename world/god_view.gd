@@ -473,6 +473,14 @@ func _build_village_anchor(entry: Dictionary) -> Node3D:
 
 
 func _on_population_changed(village_id: StringName, new_population: int) -> void:
+	# A door opening: somebody new in the village, or one fewer. Small and at
+	# the village, not a fanfare — this happens once every couple of minutes
+	# per settlement and fifteen settlements share the island.
+	var v: Village = GameState.get_village(village_id)
+	if v != null and _island != null:
+		var at := Vector3(v.position_on_island.x,
+			_island.sample_height(v.position_on_island), v.position_on_island.y)
+		MusicDirector.play_world_event(&"village_door", at)
 	var crowd := get_node_or_null(^"VillagerCrowd") as VillagerCrowd
 	if crowd:
 		crowd.set_village_population(village_id, new_population)
@@ -526,6 +534,13 @@ func _gather_under_hand() -> void:
 		return
 
 	RiteVFX.spawn(&"lumber" if result.resource == &"wood" else &"harvest", result.position, self)
+	# What it SOUNDED like: timber giving way, stone in the forge, the
+	# harvest going into the store. The generic "it landed" chime plays too,
+	# but the world sound is what tells you what you actually pulled up.
+	match result.resource:
+		&"wood": MusicDirector.play_world_event(&"uproot", result.position)
+		&"stone": MusicDirector.play_world_event(&"forge", result.position)
+		_: MusicDirector.play_world_event(&"store", result.position)
 	MusicDirector.play_rite_outcome(&"rite_landed", result.position)
 	Voices.react(&"gather_taken", {
 		"village_id": result.village.id,

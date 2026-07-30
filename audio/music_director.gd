@@ -196,6 +196,16 @@ const SFX_ASSETS := {
 	&"rite_refused": "res://audio/generated/cue_rite_refused.wav",
 	&"rite_tired": "res://audio/generated/cue_rite_tired.wav",
 	&"village_reclaimed": "res://audio/generated/cue_village_reclaimed.wav",
+	# Village life, from Kenney's RPG Audio pack (CC0 — licence text ships
+	# beside the files in audio/sfx/village/). Sourced rather than synthesised
+	# because these are RECORDINGS of real objects: an axe in wood and a pot
+	# on a hearth are exactly the kind of thing a delay line and some noise
+	# does badly, where a sea and a drone are exactly what it does well.
+	&"chop": "res://audio/sfx/village/chop.ogg",
+	&"uproot": "res://audio/sfx/village/creak2.ogg",
+	&"forge": "res://audio/sfx/village/metalPot1.ogg",
+	&"store": "res://audio/sfx/village/handleCoins.ogg",
+	&"village_door": "res://audio/sfx/village/doorOpen_1.ogg",
 }
 
 ## Fixed, tiny voice pool for the spatial one-shots. Four is deliberate: the
@@ -345,7 +355,40 @@ func _load_looping_stream(path: String) -> AudioStream:
 ## The one place a bed decides "real file" vs. "synthesized fallback".
 ## Records the answer in `_layer_is_sourced` so gain trims and the synthesis
 ## early-out both know which world they're in.
+## The mercy layer has a second, sourced option the player can pick in
+## Settings. Only that layer: the infernal bed is built on the same D as the
+## synthesised mercy one so the Naklon crossfade does not grind, and swapping
+## only one half of a matched pair would undo exactly the thing that pairing
+## was for. Choosing the sourced track therefore accepts a looser match, which
+## is the player's call to make.
+const ALT_PRAYER_ASSET := "res://audio/music/oga_exploration.mp3"
+
+## Rebuilds the music beds after the player changes the track in Settings.
+func reload_music() -> void:
+	var player: AudioStreamPlayer = layers.get(&"prayer")
+	if player == null:
+		return
+	var stream := _stream_for_layer(&"prayer")
+	if stream == null:
+		return
+	player.stream = stream
+	player.play()
+	# The generator playback handle belongs to the OLD stream. Dropped rather
+	# than reused: writing samples into a freed playback is a crash, and the
+	# sourced path does not want a generator at all.
+	_prayer_playback = null
+	if not _layer_is_sourced.get(&"prayer", true):
+		_prayer_playback = player.get_stream_playback()
+	_update_crossfade()
+
+
 func _stream_for_layer(layer_name: StringName) -> AudioStream:
+	if layer_name == &"prayer" and has_node("/root/Settings") \
+			and int(Settings.get("music_track")) == 1:
+		var alt := _load_looping_stream(ALT_PRAYER_ASSET)
+		if alt != null:
+			_layer_is_sourced[layer_name] = true
+			return alt
 	var path: String = LAYER_ASSETS.get(layer_name, "")
 	var sourced: AudioStream = _load_looping_stream(path) if path != "" else null
 	if sourced != null:
@@ -613,6 +656,26 @@ func _update_ambience_gains(delta: float) -> void:
 ## `kind` is one of &"rite_landed", &"rite_refused", &"rite_tired",
 ## &"village_reclaimed". An unknown kind is ignored rather than falling back
 ## to a wrong sound — a confident wrong answer is worse than silence here.
+## Village-life one-shots, played through the same pooled voices as the rite
+## outcomes. Kept quieter than the rite cues on purpose: these are things
+## happening in the world, not answers to something the player just did.
+const EVENT_DB := {
+	&"chop": -8.0,
+	&"uproot": -7.0,
+	&"forge": -9.0,
+	&"store": -10.0,
+	&"village_door": -13.0,
+}
+
+## Something happened in the world at `world_pos`. Unknown keys are ignored
+## rather than substituted, for the same reason play_rite_outcome ignores
+## them: a confident wrong sound is worse than silence.
+func play_world_event(kind: StringName, world_pos: Vector3) -> void:
+	if not EVENT_DB.has(kind):
+		return
+	_play_sfx_3d(kind, world_pos, float(EVENT_DB[kind]), randf_range(0.94, 1.07))
+
+
 const OUTCOME_DB := {
 	&"rite_landed": -6.0,
 	&"rite_refused": -9.0,

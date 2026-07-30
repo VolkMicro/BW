@@ -1,5 +1,25 @@
 # Audio
 
+> ## Assets added 2026-07-30 (second pass)
+>
+> | File | Source | Author | Licence |
+> |---|---|---|---|
+> | `audio/sfx/village/chop.ogg`, `creak2.ogg`, `metalPot1.ogg`, `handleCoins.ogg`, `doorOpen_1.ogg`, `footstep03.ogg` | [kenney.nl/assets/rpg-audio](https://kenney.nl/assets/rpg-audio) | Kenney Vleugels | **CC0** (licence text shipped beside the files) |
+> | `audio/music/oga_exploration.mp3` | [opengameart.org/content/medieval-exploration](https://opengameart.org/content/medieval-exploration) | see the OGA page | **CC0** |
+>
+> These are RECORDINGS of real objects, which is why they are sourced rather
+> than synthesised: an axe in wood and a pot on a hearth are exactly what a
+> delay line and some noise does badly, where a sea and a drone are exactly
+> what it does well.
+>
+> The Exploration track is offered as an ALTERNATIVE to the synthesised mercy
+> bed, selectable in Settings, not as a replacement. Only that layer: the
+> infernal bed is built on the same D as the synthesised mercy one so the
+> Naklon crossfade does not grind, and swapping one half of a matched pair
+> would undo exactly what the pairing was for. Choosing the sourced track
+> accepts a looser match — the player's call, since nobody working on this
+> can hear either of them.
+>
 > **2026-07-30: the four continuous beds are now SYNTHESISED, not sourced.**
 > `tools/synth_audio.py` writes them, and is committed beside them so any of
 > it can be retuned and regenerated. The CC0 files they replaced were
