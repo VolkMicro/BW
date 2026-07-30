@@ -75,7 +75,10 @@ done
 ```
 
 Done since the roadmap was written:
-- **PLAYABILITY AUDIT — two findings fixed, see §9 for the rest.**
+- **PLAYABILITY AUDIT written up in `docs/audit/playability_audit.md`** —
+  first sixty seconds walked through, the numbers behind aiming, pace and
+  Louhi's pressure, and the open findings ranked. Read it before touching
+  the feel of anything. Three findings fixed in that pass:
   1. **Rites were aimed at the wrong place.** The target was
      `Hand.get_target_position()`, i.e. wherever the mouse stopped. Measured
      on the shipped island: a village's Reach circle is 15-22 m, which is
