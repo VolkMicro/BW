@@ -41,6 +41,9 @@ const COLOR_MINE := Color(0.72, 0.90, 0.72)
 const COLOR_THEIRS := Color(0.92, 0.58, 0.55)
 const COLOR_NEUTRAL := Color(0.88, 0.88, 0.84)
 const COLOR_WARNING := Color(0.96, 0.82, 0.45)
+## Deliberately desaturated rather than alarming: a tired village is not in
+## trouble, it is just not listening for a minute.
+const COLOR_TIRED := Color(0.62, 0.64, 0.72)
 
 ## Store level at or below which a village is called short. Matches
 ## god_view.gd's NEED_WARNING_LEVEL — the HUD and the labels must not disagree
@@ -115,6 +118,12 @@ func _refresh() -> void:
 		label.modulate = _tint(v)
 
 
+## Below this, a village has heard so much of one kind of rite that the next
+## one is worth almost nothing. Reach's fatigue rises 0.28 per use and decays
+## over about 65 seconds, so three casts in a row take a village to ~0.16
+## effectiveness — and nothing on screen said so.
+const TIRED_EFFECTIVENESS := 0.45
+
 ## Name, then the one fact that most wants attention. Ordered by how much it
 ## matters, and only ONE line of state is shown: fifteen villages each
 ## reciting three numbers is the unreadable board this is meant to fix.
@@ -124,6 +133,19 @@ func _caption(v: Village) -> String:
 		return "%s\nPohjola's — her grip %d%%" % [v.display_name, int(round(grip * 100.0))]
 	if v.is_fully_converted():
 		return "%s\nyours" % v.display_name
+	# FATIGUE, ABOVE EVERYTHING ELSE THAT IS NOT TERMINAL.
+	#
+	# This is the game's central rhythm and it was completely invisible.
+	# Simulated against the shipped constants: a player who casts at one
+	# village every three seconds needs 115 rites to convert it, and one who
+	# waits twenty seconds between casts needs SEVEN. Fatigue is what makes
+	# the whole island the play space instead of one village — and a player
+	# who cannot see it just experiences the game quietly ignoring them.
+	var tired: float = minf(Reach.effectiveness(v.id, &"help"),
+		Reach.effectiveness(v.id, &"terror"))
+	if tired < TIRED_EFFECTIVENESS:
+		return "%s\nheard enough for now — %d%% yours" % [
+			v.display_name, int(round(v.faith_fraction * 100.0))]
 	if Stockpile.get_amount(v, &"food") <= NEED_WARNING_LEVEL:
 		return "%s\nhungry — %d%% yours" % [v.display_name, int(round(v.faith_fraction * 100.0))]
 	if Stockpile.get_amount(v, &"wood") <= NEED_WARNING_LEVEL:
@@ -136,6 +158,8 @@ func _tint(v: Village) -> Color:
 		return COLOR_THEIRS
 	if v.is_fully_converted():
 		return COLOR_MINE
+	if minf(Reach.effectiveness(v.id, &"help"), Reach.effectiveness(v.id, &"terror")) < TIRED_EFFECTIVENESS:
+		return COLOR_TIRED
 	if Stockpile.get_amount(v, &"food") <= NEED_WARNING_LEVEL \
 			or Stockpile.get_amount(v, &"wood") <= NEED_WARNING_LEVEL:
 		return COLOR_WARNING
