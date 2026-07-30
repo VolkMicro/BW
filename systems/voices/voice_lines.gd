@@ -72,6 +72,8 @@ const _PACING_COOLDOWN_MSEC := {
 	&"village_child_born": 25000,
 	&"village_child_matured": 25000,
 	&"stockpile_overflow": 30000,
+	&"village_grew": 20000,
+	&"village_shrank": 20000,
 	&"sigil_not_learned": 7000,
 	&"village_contested": 9000,
 	&"village_reclaimed": 4000,
@@ -1001,6 +1003,25 @@ func _build_pairs() -> void:
 		_p("vrc3",
 			"{village} came back. Whatever she told them there, they have stopped repeating it.",
 			"I would love to know what she told them. For research. Purely for research."),
+	]
+
+	# --- Economy: a village growing or shrinking --------------------------
+	# village_grew / village_shrank: {village_id, village_name, population}
+	_pairs[&"village_grew"] = [
+		_p("vg1",
+			"There is one more mouth in {village} than there was, and they are all pleased about it.",
+			"A NEW ONE. Do they know about us yet? Can I be the one to tell it?"),
+		_p("vg2",
+			"{village} has grown. Full stores do that, eventually and quietly.",
+			"Quietly! Nothing about that household is quiet. I have been listening."),
+	]
+	_pairs[&"village_shrank"] = [
+		_p("vs1",
+			"{village} is one smaller. Nobody will say whether they left or stopped.",
+			"I know which. I am not going to be the one who says it either."),
+		_p("vs2",
+			"Down to {population} in {village}. Hunger does the arithmetic whether we watch or not.",
+			"I watched. I always watch. It is the only respect I know how to pay."),
 	]
 
 	# --- Economy: daily needs (systems/economy/village_economy.gd) --------

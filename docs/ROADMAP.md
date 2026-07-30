@@ -56,6 +56,18 @@ at that scale, and carries 15 villages planned onto the real terrain.
 Next: Phase 2, daily life.**
 
 Done since the roadmap was written:
+- **PHASE 3: villages grow and shrink.** A comfortably fed village gains a
+  person every ~2.5 minutes; a starving one loses one faster than that. This
+  was the slow variable the daily simulation was missing — without it stores
+  rose and fell forever and the settlement itself never became anything, so
+  prosperity had no consequence a player could point at. Population drives
+  food upkeep, firewood burn, the workforce AND the number of houses
+  standing, so it is the one figure that shows up in every other system at
+  once. The crowd adds and removes individual agents rather than rebuilding
+  (a rebuild would teleport six hundred people mid-errand for one birth), and
+  the houses coalesce a burst of births into one debounced rebuild.
+  Covered by `tests/growth_test.tscn`, including that a village hovering
+  between the thresholds does NOT bank half a birth and cash it in later.
 - **The first two minutes teach themselves** (`ui/first_lessons.gd`). One
   sentence at a time, low centre, each watching for the thing it asked for
   and clearing itself when the player does it. No "click to continue", no

@@ -147,6 +147,50 @@ func populate() -> void:
 		_add_village(v)
 	_build_multimesh()
 
+## Brings the crowd in line with a village whose population has changed
+## (systems/economy/village_economy.gd's births and losses).
+##
+## Adds or removes whole agents rather than rebuilding the crowd: a rebuild
+## would re-seed every villager on the island back to their village centre,
+## so one birth in one settlement would teleport six hundred people
+## mid-errand. Removal takes the LAST matching agent, which keeps the packed
+## arrays contiguous without a compaction pass.
+func set_village_population(village_id: StringName, wanted: int) -> void:
+	var vi := _village_ids.find(village_id)
+	if vi < 0 or _terrain == null:
+		return
+	var have := 0
+	for i in _village.size():
+		if _village[i] == vi:
+			have += 1
+
+	while have < wanted:
+		_spawn_agent(vi, _village_centre[vi])
+		have += 1
+	while have > wanted:
+		if not _remove_last_agent(vi):
+			break
+		have -= 1
+	if _mm != null:
+		_mm.multimesh.instance_count = _pos.size()
+
+
+func _remove_last_agent(vi: int) -> bool:
+	for i in range(_pos.size() - 1, -1, -1):
+		if _village[i] != vi:
+			continue
+		var counts: PackedInt32Array = _job_counts[vi]
+		counts[_job[i]] -= 1
+		_job_counts[vi] = counts
+		_pos.remove_at(i); _target.remove_at(i); _village.remove_at(i)
+		_job.remove_at(i); _state.remove_at(i); _timer.remove_at(i)
+		_speed.remove_at(i); _yaw.remove_at(i)
+		if _cursor >= _pos.size():
+			_cursor = 0
+		return true
+	return false
+
+
 func get_population() -> int:
 	return _pos.size()
 
@@ -181,34 +225,41 @@ func _add_village(v: Village) -> void:
 	# each settlement by how good its ground is, and the economy charges upkeep
 	# per head — spawning forty people into a village the ledger thinks has
 	# twenty-three makes the workforce and the mouths two different numbers.
+	# Appended BEFORE the spawn loop, because _spawn_agent() writes into
+	# _job_counts[vi] directly rather than into a local copy — Packed*Array is
+	# a value type in GDScript, so a local would be a copy nobody reads.
+	_job_counts.append(counts)
+
 	var headcount: int = v.population if v.population > 0 else per_village
 	for _n in headcount:
-		# Scatter around the village centre, but only onto ground a person
-		# could stand on; a few rejected attempts is cheaper than spawning
-		# somebody in the surf and dealing with it later.
-		var xz := centre
-		for _try in 12:
-			var a := _rng.randf() * TAU
-			var r := sqrt(_rng.randf()) * 16.0   # sqrt for uniform area, not clumped centre
-			var candidate := centre + Vector2(cos(a), sin(a)) * r
-			if _height(candidate) >= min_walk_height:
-				xz = candidate
-				break
-		var p := Vector3(xz.x, _height(xz), xz.y)
-		_pos.append(p)
-		_target.append(p)
-		_village.append(vi)
-		_job.append(Job.IDLE)
-		counts[Job.IDLE] += 1
-		_state.append(State.RESTING)
-		_timer.append(_rng.randf() * 4.0)
-		_speed.append(walk_speed * _rng.randf_range(1.0 - speed_variation, 1.0 + speed_variation))
-		_yaw.append(_rng.randf() * TAU)
+		_spawn_agent(vi, centre)
 
-	# Appended AFTER the loop, not before it: Packed*Array is a value type in
-	# GDScript, so appending first would have stored a copy and every
-	# increment above would have gone into a local nobody reads.
-	_job_counts.append(counts)
+
+## One villager, standing somewhere they could actually stand.
+func _spawn_agent(vi: int, centre: Vector2) -> void:
+	# Scatter around the village centre, but only onto ground a person could
+	# stand on; a few rejected attempts is cheaper than spawning somebody in
+	# the surf and dealing with it later.
+	var xz := centre
+	for _try in 12:
+		var a := _rng.randf() * TAU
+		var r := sqrt(_rng.randf()) * 16.0   # sqrt for uniform area, not clumped centre
+		var candidate := centre + Vector2(cos(a), sin(a)) * r
+		if _height(candidate) >= min_walk_height:
+			xz = candidate
+			break
+	var p := Vector3(xz.x, _height(xz), xz.y)
+	_pos.append(p)
+	_target.append(p)
+	_village.append(vi)
+	_job.append(Job.IDLE)
+	var counts: PackedInt32Array = _job_counts[vi]
+	counts[Job.IDLE] += 1
+	_job_counts[vi] = counts
+	_state.append(State.RESTING)
+	_timer.append(_rng.randf() * 4.0)
+	_speed.append(walk_speed * _rng.randf_range(1.0 - speed_variation, 1.0 + speed_variation))
+	_yaw.append(_rng.randf() * TAU)
 
 ## Finds a real place on the terrain for each kind of work, so villagers walk
 ## somewhere meaningful instead of milling about the village centre.

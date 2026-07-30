@@ -37,7 +37,16 @@ const VillageArch := preload("res://world/village/village_architecture.gd")
 @export var auto_build_on_ready: bool = false
 
 @export_group("Dwellings")
+## Dwellings per village at the reference population below. The real count
+## scales with `Village.population`, so a village that grows visibly gains
+## houses and a village Louhi has hollowed out visibly loses them — see
+## `_house_count_for()`.
 @export var houses_per_village: int = 12
+## The population `houses_per_village` describes. SettlementPlanner sizes
+## villages between about 14 and 34 people, so this sits in the middle.
+@export var reference_population: int = 24
+@export var min_houses_per_village: int = 4
+@export var max_houses_per_village: int = 26
 ## Ring the houses occupy around the village centre. The inner radius clears
 ## the Sanctum's own worship yard (a 9 m platform) so nobody builds on it.
 @export var house_ring_inner: float = 13.0
@@ -61,6 +70,30 @@ func _ready() -> void:
 ## Called by the scene owner once villages are registered — see the _ready()
 ## ordering note in world/god_view.gd (children run before parents, so
 ## GameState is empty at this node's own _ready()).
+## Debounced rebuild. Population moves once every couple of minutes per
+## village, but fifteen villages growing independently would otherwise rebuild
+## every MultiMesh on the island several times a minute for one extra hut.
+## Coalescing into one rebuild a few seconds later costs nothing anybody can
+## see and turns a burst of births into a single pass.
+const REBUILD_DEBOUNCE := 4.0
+var _rebuild_pending: float = -1.0
+
+func queue_rebuild() -> void:
+	_rebuild_pending = REBUILD_DEBOUNCE
+	set_process(true)
+
+
+func _process(delta: float) -> void:
+	if _rebuild_pending < 0.0:
+		set_process(false)
+		return
+	_rebuild_pending -= delta
+	if _rebuild_pending <= 0.0:
+		_rebuild_pending = -1.0
+		set_process(false)
+		build()
+
+
 func build() -> void:
 	_terrain = _resolve_terrain()
 	if _terrain == null:
@@ -105,6 +138,18 @@ const LANDMARK_MODELS := [
 	"res://assets/models/village/Inn.obj",
 ]
 
+## How many dwellings this village should have standing.
+##
+## Roughly one house per two adults, scaled off the reference population, so
+## the settlement is a picture of its own census rather than a fixed dozen
+## huts. This is what makes Phase 3 growth visible at all: without it a
+## village that doubles its population looks exactly like one that starved.
+func _house_count_for(v: Village) -> int:
+	var ratio: float = float(v.population) / float(maxi(reference_population, 1))
+	return clampi(int(round(float(houses_per_village) * ratio)),
+		min_houses_per_village, max_houses_per_village)
+
+
 func _build_houses() -> void:
 	# Bucket the placements by model so each model gets exactly one MultiMesh.
 	var buckets: Array = []
@@ -115,9 +160,10 @@ func _build_houses() -> void:
 
 	for v in GameState.villages.values():
 		var centre: Vector2 = v.position_on_island
+		var wanted := _house_count_for(v)
 		var made := 0
 		var attempts := 0
-		while made < houses_per_village and attempts < houses_per_village * 25:
+		while made < wanted and attempts < wanted * 25:
 			attempts += 1
 			var a := _rng.randf() * TAU
 			var r := _rng.randf_range(house_ring_inner, house_ring_outer)

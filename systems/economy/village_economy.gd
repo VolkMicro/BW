@@ -96,6 +96,27 @@ const HUNGER_FAITH_LOSS_PER_SEC: float = 0.004
 ## Being cold is milder than being hungry — you can survive a cold night.
 const COLD_DEVOTION_LOSS_PER_SEC: float = 0.02
 
+## -- growth (Phase 3) ------------------------------------------------------
+##
+## A village that has been comfortably fed for a while gains a person; one
+## that has been starving loses one. This is the slow variable the whole daily
+## simulation was missing: without it a village's stores rose and fell forever
+## and the settlement itself never became anything, so prosperity had no
+## consequence a player could point at.
+##
+## Deliberately slow. At these numbers a well-run village adds somebody about
+## every two and a half minutes of real time — visible across a session,
+## never a number ticking in front of you. Population drives food upkeep,
+## firewood burn, the workforce AND the number of houses standing
+## (world/village/village_buildings.gd), so this is the one figure that shows
+## up in every other system at once.
+const GROWTH_FOOD_FRACTION: float = 0.45   ## store this full = people arrive
+const STARVING_FOOD_FRACTION: float = 0.04 ## this empty = people leave or die
+const SECONDS_PER_BIRTH: float = 150.0
+const SECONDS_PER_LOSS: float = 95.0       ## losing is faster than gaining, as it is
+const MAX_POPULATION: int = 60             ## the ground around one Sanctum only feeds so many
+const MIN_POPULATION: int = 3              ## below this it is not a village any more
+
 ## Seconds a village must go without before the Voices say anything about it.
 ## Without this every village narrates a one-frame dip in the stores.
 const NEED_REMARK_DELAY: float = 6.0
@@ -199,6 +220,7 @@ func _tick_production(village: Village, delta: float) -> void:
 	_apply_delta(village, &"wood", wood_gain - wood_burn)
 	_apply_delta(village, &"stone", stone_gain)
 	_tick_needs(village, delta, hungry, freezing)
+	_tick_growth(village, delta)
 	resources_changed.emit(village.id)
 
 
@@ -301,6 +323,48 @@ func _search_wildlife(n: Node) -> Node:
 		if found != null:
 			return found
 	return null
+
+
+## Births and losses. Emits `population_changed` so the crowd and the houses
+## can catch up — neither polls, because population moves once every couple of
+## minutes and rebuilding a MultiMesh every frame to check would cost more
+## than everything else here put together.
+signal population_changed(village_id: StringName, new_population: int)
+
+var _growth_progress: Dictionary = {}   # village_id -> accumulated seconds, signed
+
+func _tick_growth(village: Village, delta: float) -> void:
+	var cap: float = maxf(Stockpile.capacity(village, &"food"), 1.0)
+	var full: float = Stockpile.get_amount(village, &"food") / cap
+	var progress: float = float(_growth_progress.get(village.id, 0.0))
+
+	if full >= GROWTH_FOOD_FRACTION and village.population < MAX_POPULATION:
+		progress += delta
+	elif full <= STARVING_FOOD_FRACTION and village.population > MIN_POPULATION:
+		progress -= delta
+	else:
+		# Neither growing nor dying: drift back toward zero rather than
+		# banking half a birth indefinitely. A village that spent ten minutes
+		# on the edge should not gain somebody the moment it finally eats.
+		progress = move_toward(progress, 0.0, delta * 0.5)
+
+	if progress >= SECONDS_PER_BIRTH:
+		progress = 0.0
+		village.population += 1
+		population_changed.emit(village.id, village.population)
+		Voices.react(&"village_grew", {
+			"village_id": village.id, "village_name": village.display_name,
+			"population": village.population,
+		})
+	elif progress <= -SECONDS_PER_LOSS:
+		progress = 0.0
+		village.population -= 1
+		population_changed.emit(village.id, village.population)
+		Voices.react(&"village_shrank", {
+			"village_id": village.id, "village_name": village.display_name,
+			"population": village.population,
+		})
+	_growth_progress[village.id] = progress
 
 
 func _resolve_crowd() -> Node:

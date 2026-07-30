@@ -417,6 +417,14 @@ func _place_villages_and_villagers() -> void:
 	if markers:
 		markers.build(_island)
 
+	# Phase 3: a village that grows gains people and houses; one that starves
+	# loses both. Wired here rather than inside the economy because the crowd
+	# and the buildings are scene nodes and systems/economy/ does not know
+	# about the scene (docs/systems/OWNERSHIP.md).
+	var economy := get_node_or_null(^"VillageEconomy") as VillageEconomy
+	if economy and not economy.population_changed.is_connected(_on_population_changed):
+		economy.population_changed.connect(_on_population_changed)
+
 
 ## Builds the scene-side half of a planned village: the anchor, its Sanctum,
 ## its Reach border ring and the container the Calling Stone hangs off.
@@ -448,6 +456,15 @@ func _build_village_anchor(entry: Dictionary) -> Node3D:
 	villagers.name = "Villagers"
 	anchor.add_child(villagers)
 	return anchor
+
+
+func _on_population_changed(village_id: StringName, new_population: int) -> void:
+	var crowd := get_node_or_null(^"VillagerCrowd") as VillagerCrowd
+	if crowd:
+		crowd.set_village_population(village_id, new_population)
+	var buildings := get_node_or_null(^"VillageBuildings") as VillageBuildings
+	if buildings:
+		buildings.queue_rebuild()
 
 
 ## Minimum height a village will settle at — above the surf, not on a beach
