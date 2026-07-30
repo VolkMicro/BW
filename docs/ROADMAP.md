@@ -75,6 +75,23 @@ done
 ```
 
 Done since the roadmap was written:
+- **PLAYABILITY AUDIT — two findings fixed, see §9 for the rest.**
+  1. **Rites were aimed at the wrong place.** The target was
+     `Hand.get_target_position()`, i.e. wherever the mouse stopped. Measured
+     on the shipped island: a village's Reach circle is 15-22 m, which is
+     25-35 SCREEN PIXELS from god view, while a recognisable sigil spans
+     150-300 px. So the natural act of drawing a shape over a village ends
+     a hundred-odd metres away from it and the rite lands on nothing. Rites
+     now use the CENTROID of the stroke, marched onto the terrain.
+     Guarded by `tests/aim_test.tscn`.
+  2. **The Voices were drowned by the food chain.** `wildlife_kill` had no
+     pacing cooldown, on the reasoning that the wildlife package rate-limits
+     itself — it rate-limits ALARMS, not kills. When the animal population
+     went from 16 to 74 to cover a 1200 m island, predation became the most
+     frequent event in the game, and every screenshot shows a Voice log that
+     is six lines of snagbill obituary with the hungry-village and
+     contested-village lines scrolled off the top. The Voices are the only
+     narrator this game has.
 - **PHASE 5: the player god compounds too** (`systems/faith/godhood.gd`).
   Louhi's half of the compounding landed with her shortening clock; the
   player's half was missing entirely. `Reach.radius_for_village()` grows with

@@ -223,6 +223,8 @@ enum Ending { NONE, VICTORY, DIVIDED, DEFEAT }
 @onready var _objective_label: Label = $UI/ObjectiveLabel
 @onready var _rites_label: RiteGrimoire = $UI/RitesLabel
 @onready var _first_lessons: FirstLessons = get_node_or_null(^"FirstLessons")
+## Resolved in _ready() from under the Hand — see the wiring pass below.
+var _sigil_caster: SigilCaster = null
 @onready var _end_card: Label = $UI/EndCard
 @onready var _voice_log: VoiceLog = $UI/VoiceLog
 
@@ -597,6 +599,7 @@ func _wire_campaign_and_louhi() -> void:
 	# campaign.md's flagged hook, verbatim: "connect its rite_cast signal to
 	# CampaignManager.notify_rite_cast(rite_id) once an instance exists."
 	var sigil_caster: SigilCaster = _hand.get_node(^"SigilCaster")
+	_sigil_caster = sigil_caster
 	sigil_caster.rite_cast.connect(
 		func(rite_id: StringName, _confidence: float) -> void:
 			_campaign_manager.notify_rite_cast(rite_id)
@@ -692,7 +695,11 @@ func _update_nudges() -> void:
 func _on_rite_cast(rite_id: StringName, confidence: float) -> void:
 	if _ending != Ending.NONE:
 		return
-	var world_pos: Vector3 = _hand.get_target_position()
+	# The MIDDLE of the shape the player just drew, not the Hand's position.
+	# See SigilCaster.last_stroke_centre: the Hand is wherever the mouse
+	# stopped, which for a 200-pixel sigil is far outside the 25-35 pixel
+	# circle the player was aiming at.
+	var world_pos: Vector3 = _ground_under_viewport_point(_sigil_caster.last_stroke_centre)
 	var target: Village = _village_in_reach_of(world_pos)
 
 	# CONTESTING A VILLAGE LOUHI HOLDS.
@@ -850,6 +857,57 @@ func _contest_rite(v: Village, rite_id: StringName, confidence: float, world_pos
 			"grip": result.grip,
 		})
 	_refresh_objective()
+
+
+## Where a viewport point lands on the island.
+##
+## Uses the terrain's own heightmap by marching the camera ray rather than a
+## physics raycast: the ray is cast every time a rite is drawn, the answer has
+## to agree with the surface villages were placed on (which is the smoothed,
+## eroded grid — see island_generator.sample_smoothed_height), and a physics
+## query would also happily hit a villager or a thrown boulder.
+func _ground_under_viewport_point(point: Vector2) -> Vector3:
+	var cam := get_viewport().get_camera_3d()
+	if cam == null:
+		return _hand.get_target_position()
+	var origin := cam.project_ray_origin(point)
+	var dir := cam.project_ray_normal(point)
+	if absf(dir.y) < 0.0001:
+		return _hand.get_target_position()
+
+	# Coarse march to find the step that crosses the ground, then bisect. A
+	# closed-form solve is impossible against a heightmap, and 64 + 12 samples
+	# of a cached array costs nothing on the one frame a rite is cast.
+	var t := 0.0
+	var step := 12.0
+	var last_above := true
+	for i in 200:
+		var p := origin + dir * t
+		var above := p.y > _island.sample_height(Vector2(p.x, p.z))
+		if i > 0 and above != last_above:
+			var lo := t - step
+			var hi := t
+			for _b in 12:
+				var mid := (lo + hi) * 0.5
+				var q := origin + dir * mid
+				if q.y > _island.sample_height(Vector2(q.x, q.z)):
+					lo = mid
+				else:
+					hi = mid
+			var hit := origin + dir * ((lo + hi) * 0.5)
+			return hit
+		last_above = above
+		t += step
+		if t > 6000.0:
+			break
+	# Never crossed the ground: the player drew over open sea or sky. Fall
+	# back to the sea plane so the caller still gets a sane world position and
+	# refuses the rite for being out of reach, rather than aiming at the Hand.
+	var to_sea := -origin.y / dir.y
+	if to_sea > 0.0:
+		var sea := origin + dir * to_sea
+		return sea
+	return _hand.get_target_position()
 
 
 ## See CONVERSION_TIPPING_POINT. Emits through GameState.set_faith_fraction()

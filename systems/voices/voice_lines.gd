@@ -87,6 +87,16 @@ const _PACING_COOLDOWN_MSEC := {
 	&"missionary_arrived": 12000,
 	&"missionary_recalled": 12000,
 	&"sanctum_damaged": 8000,
+	# Wildlife had NO cooldown, on the reasoning that the wildlife package
+	# rate-limits its own. It rate-limits ALARMS; kills are unthrottled, and
+	# when the island's animal population went from 16 to 74 to cover 1200 m
+	# of ground, predation became the most frequent event in the game. Six
+	# lines of snagbill obituary is what the Voice log actually showed in
+	# every screenshot, with the hungry-village and contested-village lines
+	# scrolled off the top. The Voices are the game's only narrator; letting
+	# the food chain monopolise them costs the player the plot.
+	&"wildlife_kill": 45000,
+	&"wildlife_scattered": 30000,
 }
 
 ## Set false from a debug/QA panel to hear every trigger the instant it

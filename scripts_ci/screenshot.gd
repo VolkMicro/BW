@@ -86,6 +86,23 @@ func _ready() -> void:
 					crowd.count_job(v.id, VillagerCrowd.Job.IDLE)]
 			print(line)
 
+	# SHOT_DUMP_REACH: how big a target each village actually is, in metres
+	# and in screen pixels at the current camera. The playability question
+	# "can a person hit this" is a pixel question, not a design one.
+	if OS.get_environment("SHOT_DUMP_REACH") != "":
+		var cam3 := get_viewport().get_camera_3d()
+		for v_id in GameState.villages:
+			var v: Village = GameState.villages[v_id]
+			var r: float = Reach.radius_for_village(v.id) + Godhood.reach_bonus()
+			var px := -1.0
+			if cam3 != null:
+				var centre := Vector3(v.position_on_island.x, 0.0, v.position_on_island.y)
+				var edge := centre + Vector3(r, 0.0, 0.0)
+				if not cam3.is_position_behind(centre):
+					px = cam3.unproject_position(centre).distance_to(cam3.unproject_position(edge))
+			print("REACH %s | faith %.2f pop %d | radius %.1f m | %.0f px" % [
+				v.display_name, v.faith_fraction, v.population, r, px])
+
 	# SHOT_SHOW: comma-separated node names under the loaded scene to force
 	# visible before the capture. Panels bound to a keypress cannot otherwise
 	# be photographed by a harness that has no keyboard.

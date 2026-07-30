@@ -26,6 +26,18 @@ extends Node3D
 ## 0.75 on the $1 recognizer's 0..1 normalized score, well below "strict".
 
 signal rite_cast(rite_id: StringName, confidence: float)
+## Viewport-space centre of the stroke that was just recognised.
+##
+## WHERE A RITE LANDS IS WHERE YOU DREW IT, NOT WHERE YOU STOPPED.
+##
+## Consumers used to ask the Hand for its current target, which is wherever
+## the mouse happened to be when the stroke ENDED. Measured against the
+## shipped island that is unplayable: a village's Reach circle is 15-22 m,
+## about 25-35 screen pixels from god view, while a recognisable sigil spans
+## 150-300 px — so the natural act of drawing a shape OVER a village finishes
+## a hundred-odd metres away from it and the rite lands on nothing. The
+## centroid is what the player means by "over".
+var last_stroke_centre: Vector2 = Vector2.ZERO
 signal stroke_started()
 ## Fires on every completed stroke attempt, matched or not, so a debug HUD
 ## or the Two Voices can react even to failed casts.
@@ -152,6 +164,7 @@ func _try_recognize() -> void:
 	if _stroke_span(points) < min_stroke_span_px:
 		return
 
+	last_stroke_centre = UnistrokeRecognizer.centroid(points)
 	var result := _recognizer.recognize(points)
 	var rite_id: StringName = result.get("rite_id", &"")
 	var score: float = result.get("score", 0.0)
