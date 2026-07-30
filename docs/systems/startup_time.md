@@ -1,4 +1,29 @@
-# Startup time, and the grey screen
+# Startup time, the grey screen, and measuring performance
+
+## Measuring performance on a real machine
+
+Everything in this document was measured through llvmpipe, a software
+rasteriser. It says nothing about an Intel iGPU or an RTX card. To get a real
+number, on the machine that matters:
+
+```
+godot --path . scripts_ci/benchmark.tscn
+```
+
+It builds the world, parks the camera at three viewpoints, throws away the
+warm-up frames, times 150 frames at each, and prints a table. No editor, no
+account, no remote access, about half a minute on real hardware.
+
+It reports the median, the 95th percentile and the worst frame rather than
+just the average, because an average hides the exact failure this game is
+prone to: a scene that averages 30 fps but stalls for 400 ms whenever the
+camera swings over new ground feels broken, and the average will not say so.
+Shader-compilation stalls are called out separately, because they are a real
+cost but a once-per-machine one.
+
+`BENCH_WARMUP` and `BENCH_FRAMES` shorten it for smoke-testing somewhere slow.
+
+
 
 ## The report
 
