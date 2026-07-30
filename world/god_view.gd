@@ -62,6 +62,12 @@ const TOTAL_VILLAGES := 15
 ## damage is not a warning.
 const NEED_WARNING_LEVEL := 12.0
 
+## Below this method effectiveness, a rite is announced as "they have heard
+## enough of that" rather than as a clean landing. Matches
+## ui/village_markers.gd's TIRED_EFFECTIVENESS — the sound and the caption
+## must not disagree about whether a village is listening.
+const RITE_TIRED_EFFECTIVENESS := 0.45
+
 ## One entry per village: which culture, where its container anchor lives in
 ## the scene tree (X/Z authored on that Node3D in world/god_view.tscn; Y is
 ## filled in below from the real terrain), and its starting
@@ -720,6 +726,7 @@ func _on_rite_cast(rite_id: StringName, confidence: float) -> void:
 		# explain jurisdiction. This is the single most important teaching
 		# moment in the game — it is how a player learns Reach exists.
 		_hand.request_refusal_flash(&"rite_out_of_reach")
+		MusicDirector.play_rite_outcome(&"rite_refused", world_pos)
 		if _first_lessons != null:
 			_first_lessons.saw_rite_refused_out_of_reach = true
 		var nearest: Village = _nearest_village(world_pos)
@@ -747,6 +754,14 @@ func _on_rite_cast(rite_id: StringName, confidence: float) -> void:
 	# heard of. See systems/faith/godhood.gd — this is the player's half of
 	# the compounding the endgame needs, mirroring Louhi's shortening clock.
 	var quality := (0.5 + 0.5 * clampf(confidence, 0.0, 1.0)) * Godhood.rite_multiplier()
+	# Told apart by ear: a rite that landed, and one that landed on a village
+	# which has heard enough of that method for now. Read BEFORE the call,
+	# because convert_via_* registers the use and moves the fatigue itself.
+	var method: StringName = &"terror" if TERROR_RITE_AMOUNT.has(rite_id) else &"help"
+	var landed_well: bool = Reach.effectiveness(target.id, method) >= RITE_TIRED_EFFECTIVENESS
+	MusicDirector.play_rite_outcome(
+		&"rite_landed" if landed_well else &"rite_tired", world_pos)
+
 	if HELP_RITE_AMOUNT.has(rite_id):
 		# Fires Voices &"village_helped" and shifts Naklon toward mercy —
 		# both already implemented in systems/faith/reach.gd:146-154.
@@ -851,6 +866,8 @@ func _contest_rite(v: Village, rite_id: StringName, confidence: float, world_pos
 		TERROR_RITE_AMOUNT.get(rite_id, 4.0)))
 	RiteVFX.spawn(rite_id, world_pos, self)
 	var result := Reclaim.press(v, amount * quality)
+	MusicDirector.play_rite_outcome(
+		&"village_reclaimed" if result.released else &"rite_landed", world_pos)
 	if not result.released:
 		Voices.react(&"village_contested", {
 			"village_id": v.id, "village_name": v.display_name,

@@ -1,3 +1,47 @@
+# Audio
+
+> **2026-07-30: the four continuous beds are now SYNTHESISED, not sourced.**
+> `tools/synth_audio.py` writes them, and is committed beside them so any of
+> it can be retuned and regenerated. The CC0 files they replaced were
+> licence-clean and wrong for this island — see "Why they were replaced"
+> below. The one-shot SFX for grabbing, throwing, the rite flash, thunder and
+> the bell are still the sourced CC0 assets listed further down, and their
+> paper trail is unchanged.
+>
+> ## Why they were replaced
+>
+> The project owner's verdict on the shipped mix was that the sea "just makes
+> a monotone white-noise sound" and the whole thing "feels plastic". Both are
+> accurate and both were structural:
+>
+> * **The sea was a short surf recording on a loop.** The ear resolves that
+>   into flat noise within a few seconds, because a loop cuts the drain off
+>   every wave that straddles its ends — what is left is texture where there
+>   should be events. The synthesised sea is built from events instead: three
+>   incommensurate swell periods with discrete breakers over them, each with
+>   its own attack, hiss and drain. Measured at 5.5x between its quietest and
+>   loudest half-second, where a noise bed is by definition 1.0x.
+> * **Both beds were far too bright.** Measured spectral centroids on the
+>   first synthesis attempt: sea 4181 Hz, wind 5123 Hz. That is hiss, not
+>   weather. Surf and wind heard from three hundred metres up have had their
+>   sparkle absorbed by the air long before they arrive. Now 1357 Hz and
+>   1763 Hz.
+> * **There was no music, only ambience.** The two "music" layers were
+>   generic ambient loops with no relationship to each other or to the game.
+>   They are now built on the same D so the Naklon crossfade does not grind:
+>   D Dorian above (the mode most northern and eastern European folk music
+>   sits in — minor-coloured but with a raised sixth, melancholy without
+>   being funereal), the same D an octave down with a semitone rub below.
+>   Plucked voices are Karplus-Strong, which is the closest thing to a gut
+>   string you can get out of a delay line and some noise.
+>
+> Four outcome cues were added at the same time, for the playability audit's
+> finding that a rite landing, a rite out of reach and a rite on a village
+> that has heard enough all felt identical.
+>
+> **Still unverified by ear.** This sandbox has no audio device; everything
+> above is measured, not listened to. Retune after a real listen.
+
 # Adaptive audio — music & ambience (package R)
 
 ## What this is

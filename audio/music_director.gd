@@ -71,11 +71,32 @@ var layers: Dictionary = {} # &"prayer" / &"infernal" -> AudioStreamPlayer
 ## docs/systems/audio.md "Assets used" for author/URL/licence per row.
 ## A missing file is NOT fatal — `_stream_for_layer()` falls back to that
 ## layer's original `AudioStreamGenerator` synthesis and warns.
+## SYNTHESISED FOR THIS GAME, not sourced. See `tools/synth_audio.py`, which
+## writes every one of these and is committed beside them so any of it can be
+## retuned and regenerated.
+##
+## The sourced CC0 beds these replaced were licence-clean and wrong. Their
+## character had nothing to do with this island: the sea in particular was a
+## short surf recording on a loop, which the ear resolves into flat noise
+## within a few seconds because a loop cuts the drain off every wave that
+## straddles its ends. The synthesised sea is built out of events instead —
+## three incommensurate swell periods with discrete breakers over them —
+## measured at 5.5x between its quietest and loudest half-second, where a
+## noise bed is by definition 1.0x.
+##
+## The two music layers are built on the same D so the Naklon crossfade does
+## not grind: D Dorian above, the same D an octave down with a semitone rub
+## below. Dorian because it is the mode most northern and eastern European
+## folk music sits in — minor-coloured but with a raised sixth, melancholy
+## without being funereal.
+##
+## A missing file is NOT fatal — `_stream_for_layer()` falls back to that
+## layer's original `AudioStreamGenerator` synthesis and warns.
 const LAYER_ASSETS := {
-	&"prayer": "res://audio/music/heavenly_loop.ogg",              # isaiah658, CC0
-	&"infernal": "res://audio/music/dark_cavern_ambient_002.ogg",  # Paul Wortmann, CC0
-	&"wind": "res://audio/music/wind_woosh_loop.ogg",              # SketchMan3, CC0
-	&"sea": "res://audio/music/jasinski_beach_waves.ogg",          # jasinski (via qubodup), CC0
+	&"prayer": "res://audio/generated/music_prayer.wav",
+	&"infernal": "res://audio/generated/music_infernal.wav",
+	&"wind": "res://audio/generated/wind_bed.wav",
+	&"sea": "res://audio/generated/sea_swell.wav",
 }
 
 ## Which layers ended up file-backed (true) vs. synthesized-fallback (false).
@@ -89,9 +110,13 @@ var _layer_is_sourced: Dictionary = {}
 ## other; a real recording has whatever level its author mastered it at, which
 ## is generally much hotter. UNVERIFIED BY EAR — this sandbox has no audio
 ## device. Retune after an actual listen.
-const SOURCED_MUSIC_TRIM_DB := -8.0
-const SOURCED_WIND_TRIM_DB := -7.0
-const SOURCED_SEA_TRIM_DB := -6.0
+## Trims for the file-backed layers. The generator now writes every bed
+## peak-normalised to the same headroom, so these are a mix balance rather
+## than a guess at somebody else's mastering. STILL UNVERIFIED BY EAR — this
+## sandbox has no audio device. Retune after an actual listen.
+const SOURCED_MUSIC_TRIM_DB := -11.0
+const SOURCED_WIND_TRIM_DB := -13.0
+const SOURCED_SEA_TRIM_DB := -9.0
 
 # --- Tuning: music synthesis -------------------------------------------------
 
@@ -160,6 +185,17 @@ const SFX_ASSETS := {
 	&"throw": "res://audio/sfx/sfx100v2_air_01.ogg",      # rubberduck, CC0
 	&"rite": "res://audio/sfx/magical_4.ogg",             # JaggedStone, CC0
 	&"thunder": "res://audio/sfx/sfx100v2_thunder_01.ogg",# rubberduck, CC0
+	# Outcome cues, synthesised by tools/synth_audio.py. The playability audit
+	# found that a rite which lands, one that is out of reach and one the
+	# village is tired of all felt identical — the Hand flashes for one of
+	# them and that is easy to miss while looking at the village. These are
+	# built to be told apart by ear alone: landed rises and is bright, refused
+	# falls and is dull, tired is the landing cue muffled, because the player
+	# did everything right and it simply did not land hard.
+	&"rite_landed": "res://audio/generated/cue_rite_landed.wav",
+	&"rite_refused": "res://audio/generated/cue_rite_refused.wav",
+	&"rite_tired": "res://audio/generated/cue_rite_tired.wav",
+	&"village_reclaimed": "res://audio/generated/cue_village_reclaimed.wav",
 }
 
 ## Fixed, tiny voice pool for the spatial one-shots. Four is deliberate: the
@@ -565,6 +601,30 @@ func _update_ambience_gains(delta: float) -> void:
 	if _layer_is_sourced.get(&"wind", false):
 		var brightness_ratio: float = clampf((_wind_brightness - WIND_FILTER_MIN) / WIND_FILTER_RANGE, 0.0, 1.0)
 		_wind_player.pitch_scale = 0.97 + brightness_ratio * 0.09
+
+## What became of the rite the player just drew, said out loud.
+##
+## Called by the integration layer (world/god_view.gd) rather than derived
+## here, because only that layer knows whether a recognised rite reached a
+## village, fell outside anyone's Reach, or landed on a village that has heard
+## enough of it. The playability audit found those three outcomes were
+## indistinguishable to a player watching the village rather than the Hand.
+##
+## `kind` is one of &"rite_landed", &"rite_refused", &"rite_tired",
+## &"village_reclaimed". An unknown kind is ignored rather than falling back
+## to a wrong sound — a confident wrong answer is worse than silence here.
+const OUTCOME_DB := {
+	&"rite_landed": -6.0,
+	&"rite_refused": -9.0,
+	&"rite_tired": -12.0,
+	&"village_reclaimed": -3.0,
+}
+
+func play_rite_outcome(kind: StringName, world_pos: Vector3) -> void:
+	if not OUTCOME_DB.has(kind):
+		return
+	_play_sfx_3d(kind, world_pos, float(OUTCOME_DB[kind]), 1.0)
+
 
 # --- One-shot SFX: playback ---------------------------------------------------
 
