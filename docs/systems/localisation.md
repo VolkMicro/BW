@@ -68,10 +68,15 @@ substituted after translation.
 
 ## Known gaps
 
-* Roughly half the Voice pairs are still English (campaign quests, Louhi's
-  signs, the Avatar, missionaries, construction, offerings).
+* **Every authored Voice line is translated** — all 253 pairs, verified by
+  the extraction script above returning zero missing. What remains English is
+  listed below.
 * Quest titles in `campaign/quest_catalog.gd` are not routed through `tr()`
   yet, so the objective line's "Spoken of: ..." stays English.
+* Relic names, building names and culture display names are content
+  resources (`data/`, `systems/economy/buildings/`) and are substituted into
+  Voice lines as `{relic}` / `{building}` / `{culture}`. The sentences around
+  them are Russian; the nouns are not.
 * Changing the language mid-game does not rename villages that have already
   been generated; their `display_name` was resolved at plan time. Restarting
   the island fixes it. Worth doing properly if language switching turns out
