@@ -478,6 +478,44 @@ func _on_population_changed(village_id: StringName, new_population: int) -> void
 		buildings.queue_rebuild()
 
 
+## Puts the camera on the creature, from a distance where it reads as an
+## animal rather than as a dot.
+func _frame_avatar() -> void:
+	if not is_instance_valid(_avatar):
+		return
+	var at: Vector3 = _avatar.global_position
+	var eye: Vector3 = at + Vector3(0.0, 34.0, 52.0)
+	var xform := Transform3D(Basis.looking_at(at - eye, Vector3.UP), eye)
+	_camera_rig.frame_god_view(xform)
+
+
+## A spot just outside the Reach ring of the village that believes in you
+## most. Outside deliberately: standing inside it, the Avatar's context is
+## permanently `guard_village` and there is nothing for a god to teach.
+func _avatar_start_site() -> Vector2:
+	var best: Village = null
+	var best_faith := -1.0
+	for value in GameState.villages.values():
+		var v: Village = value
+		if v.loyal_to_rival:
+			continue
+		if v.faith_fraction > best_faith:
+			best_faith = v.faith_fraction
+			best = v
+	if best == null:
+		return Vector2.ZERO
+	var centre: Vector2 = best.position_on_island
+	var radius: float = Reach.radius_for_village(best.id) + 14.0
+	# Walk a ring around the village until the ground is something a bear can
+	# stand on, rather than trusting one bearing and hoping.
+	for i in 16:
+		var a := TAU * float(i) / 16.0
+		var spot := centre + Vector2(cos(a), sin(a)) * radius
+		if _island.sample_height(spot) >= 2.0:
+			return spot
+	return centre
+
+
 ## Minimum height a village will settle at — above the surf, not on a beach
 ## that the shoreline foam is already washing over.
 const VILLAGE_MIN_HEIGHT := 3.0
@@ -587,7 +625,17 @@ func _place_avatar_and_hand() -> void:
 	# about scenery. Standing at a village, praise (F) reinforces
 	# `guard_village`, which is a thing a god might actually want a bear to
 	# learn. See _update_avatar_context() and docs/systems/gameplay_loop.md.
-	var avatar_xz := Vector2(-56.0, -50.0)
+	# NEXT TO A REAL VILLAGE, worked out at runtime.
+	#
+	# This used to be the hard-coded (-56, -50) with a comment explaining it
+	# had been chosen to sit just outside Fenrayt Hollow's Reach ring. That
+	# was true when the island was 320 m across. The island is 1200 m now and
+	# the villages are planned onto it, so the constant pointed at an empty
+	# hillside four hundred metres from anybody — a creature the player could
+	# not find, in a context that taught it about scenery.
+	var avatar_xz := _avatar_start_site()
+	_avatar.terrain = _island
+	_avatar.set_home(avatar_xz)
 	_avatar.position = Vector3(avatar_xz.x, _island.sample_height(avatar_xz) + 1.0, avatar_xz.y)
 
 	var hand_xz := Vector2(18.0, 12.0)
@@ -1302,6 +1350,16 @@ func _unhandled_input(event: InputEvent) -> void:
 			Naklon.shift(0.1, 1.0)
 		KEY_L:
 			_louhi.debug_force_evaluate()
+		KEY_4:
+			# Find your creature. On a 1200 m island a bear is a speck, and
+			# before this there was no way to locate it at all.
+			_frame_avatar()
+		KEY_C:
+			# Send it where you are pointing.
+			if is_instance_valid(_avatar) and _avatar.has_method("walk_to"):
+				var to: Vector3 = _hand.get_target_position()
+				_avatar.walk_to(Vector2(to.x, to.z))
+				Voices.react(&"avatar_sent", {"stage": _avatar.get_growth_stage_name()})
 
 
 func _refresh_help_label() -> void:
@@ -1316,5 +1374,5 @@ func _refresh_help_label() -> void:
 	_help_label.text = (
 		tr("Mouse: aim the Hand   Hold Left Click: grip/throw   Hold Right Click + drag: draw a rite over a village") + "\n" +
 		tr("Arrows: pan   Scroll: zoom   Middle-drag: orbit   3: rites you know (shapes)   Esc: pause / save / leave   1: god view   2: walk into %s's Sanctum (Enter to interact)") % walkable_name + "\n" +
-		tr("[ / ]: nudge Naklon toward Mercy / Cruelty   F / G: praise / chastise the Avatar   L: force Louhi to re-evaluate now   P: graphics preset (now: %s)") % tr(preset_text)
+		tr("[ / ]: nudge Naklon toward Mercy / Cruelty   F / G: praise / chastise the Avatar   4: find your creature   C: send it where you point   L: force Louhi to re-evaluate now   P: graphics preset (now: %s)") % tr(preset_text)
 	)

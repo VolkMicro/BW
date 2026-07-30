@@ -100,6 +100,9 @@ const GRAVITY := 9.8
 # --- Config ------------------------------------------------------------------
 @export var species: AvatarSpecies = null
 @export var show_debug_label: bool = true
+## Off: the label is the creature's name and growth stage, which is how a
+## player finds it. On: the learning model's internals, for tuning.
+@export var show_developer_readout: bool = false
 
 ## The three Attachments. Independently-tracked running scalars, 0..1 —
 ## see the class doc comment above: NEVER slaved to Naklon.value.
@@ -617,7 +620,22 @@ func _update_debug_label() -> void:
 	_label.visible = show_debug_label
 	if not show_debug_label:
 		return
+	# Float the label clear of the creature's own head. The Avatar is scaled
+	# by species and growth stage — at the bear's 4.5 the authored 2.6 m put
+	# the caption inside its shoulders, hiding the thing it was meant to help
+	# you find.
+	_label.position.y = 2.6 * get_effective_scale() + 2.0
 	var name_str := species.display_name if species else "Avatar"
+	if not show_developer_readout:
+		# What a PLAYER needs: which creature this is and how grown it is.
+		# The three attachment scalars and the praise/chastise counters are
+		# the learning model's internals — useful when tuning it, noise when
+		# playing. This label is now the only thing marking the creature on a
+		# 1200 m island, so it has to be a name, not a debug dump.
+		_label.text = "%s\n%s" % [
+			TranslationServer.translate(name_str),
+			TranslationServer.translate(get_growth_stage_name())]
+		return
 	_label.text = "%s (%s)\nW:%.2f  T:%.2f  K:%.2f\npraise:%d  chastise:%d  devotion:%.0f" % [
 		name_str, get_growth_stage_name(), attachment_watching, attachment_toothy, attachment_kind,
 		praise_count, chastise_count, devotion_fed,
@@ -625,18 +643,140 @@ func _update_debug_label() -> void:
 
 
 # ---------------------------------------------------------------------------
-# Minimal physical presence: gravity + a small idle breathing bob so the
-# demo/game world doesn't show a perfectly static prop. No locomotion/AI
-# steering is implemented here on purpose — see docs/systems/avatar.md
-# "Scoped out": actual roaming/hunting/duel movement is Package L's
-# (actors/avatar/combat/) territory, built against this file's public API.
+# WALKING.
+#
+# This used to be gravity and nothing else, with a comment explaining that
+# locomotion belonged to a combat package that was never built. The result, on
+# the shipped island, was a creature that stood on one spot for the entire
+# game — the project owner's question was literally "where is my creature?",
+# and the honest answer was "two metres tall, in a field, unable to move, four
+# hundred metres from the nearest village".
+#
+# A learning model with no body cannot be taught anything by a player who
+# cannot see it. This is the smallest locomotion that makes the Avatar a
+# presence: it walks to where it is sent, and otherwise drifts around the
+# ground it thinks of as home. No pathfinding — the same reasoning as the
+# villager crowd, which shares this island and this frame budget: refuse the
+# steps that would go into the sea or up a cliff and that is enough.
 # ---------------------------------------------------------------------------
+
+## Metres per second at base_speed 1.0. The bear's 0.75 makes it deliberately
+## slower than a villager (2.1): a god's creature that outruns everything is
+## hard to watch, and watching it is the whole relationship.
+const WALK_SPEED := 3.4
+## How close counts as arrived.
+const ARRIVE_RADIUS := 2.5
+## A step that would drop it below this is refused — it will not walk into
+## the sea.
+const MIN_WALK_HEIGHT := 0.6
+## A step that climbs more than this in one stride is refused.
+const MAX_STEP_CLIMB := 2.2
+## How far it drifts from home when it has nowhere to be.
+const ROAM_RADIUS := 34.0
+const ROAM_PAUSE_MIN := 4.0
+const ROAM_PAUSE_MAX := 12.0
+
+## Where it goes when it has nothing else to do. Set by whoever placed it.
+var home_position: Vector2 = Vector2.ZERO
+## Terrain to walk on. Anything with sample_height(Vector2) -> float.
+var terrain: Node = null
+
+var _walk_target: Vector3 = Vector3.ZERO
+var _has_target: bool = false
+var _roam_timer: float = 0.0
+var _roam_rng := RandomNumberGenerator.new()
+
+
+## Send the creature somewhere. This is the god pointing.
+func walk_to(world_xz: Vector2) -> void:
+	_walk_target = Vector3(world_xz.x, _ground(world_xz), world_xz.y)
+	_has_target = true
+
+
+## Where it lives when nobody is telling it anything.
+func set_home(world_xz: Vector2) -> void:
+	home_position = world_xz
+
+
+func is_walking() -> bool:
+	return _has_target
+
+
 func _physics_process(delta: float) -> void:
 	if not is_on_floor():
 		velocity.y -= GRAVITY * delta
 	else:
 		velocity.y = 0.0
+
+	if _has_target:
+		_step_toward(_walk_target, delta)
+	else:
+		_roam(delta)
+
 	move_and_slide()
+	_stand_on_ground()
+
+
+func _step_toward(target: Vector3, delta: float) -> void:
+	var here := global_position
+	var to := Vector2(target.x - here.x, target.z - here.z)
+	if to.length() <= ARRIVE_RADIUS:
+		_has_target = false
+		velocity.x = 0.0
+		velocity.z = 0.0
+		return
+	var speed := WALK_SPEED * (species.base_speed if species != null else 1.0)
+	var dir := to.normalized()
+	var next := Vector2(here.x, here.z) + dir * speed * delta
+	var h := _ground(next)
+	# Refuse the sea and the cliff, and give up on a target it cannot reach
+	# rather than grinding against the obstacle forever.
+	if h < MIN_WALK_HEIGHT or h - here.y > MAX_STEP_CLIMB:
+		_has_target = false
+		velocity.x = 0.0
+		velocity.z = 0.0
+		return
+	velocity.x = dir.x * speed
+	velocity.z = dir.y * speed
+	# Face where it is going. Body only — rotating the CharacterBody3D would
+	# rotate its capsule and its collision with it.
+	if _body != null:
+		_body.rotation.y = lerp_angle(_body.rotation.y, atan2(-dir.x, -dir.y), delta * 4.0)
+
+
+func _roam(delta: float) -> void:
+	velocity.x = 0.0
+	velocity.z = 0.0
+	_roam_timer -= delta
+	if _roam_timer > 0.0:
+		return
+	_roam_timer = _roam_rng.randf_range(ROAM_PAUSE_MIN, ROAM_PAUSE_MAX)
+	if home_position == Vector2.ZERO:
+		return
+	var a := _roam_rng.randf() * TAU
+	var r := sqrt(_roam_rng.randf()) * ROAM_RADIUS
+	var spot := home_position + Vector2(cos(a), sin(a)) * r
+	if _ground(spot) >= MIN_WALK_HEIGHT:
+		walk_to(spot)
+
+
+## Keeps its feet on the heightmap. The island has collision, but the Avatar
+## is the only physics body that walks on it and a single sample is far
+## cheaper than resolving a capsule against a 301x301 collision mesh every
+## frame — the same trade the villager crowd makes for six hundred agents.
+func _stand_on_ground() -> void:
+	if terrain == null:
+		return
+	var h := _ground(Vector2(global_position.x, global_position.z))
+	if global_position.y < h:
+		global_position.y = h
+		velocity.y = 0.0
+
+
+func _ground(world_xz: Vector2) -> float:
+	if terrain != null and terrain.has_method("sample_height"):
+		return terrain.call("sample_height", world_xz)
+	return global_position.y
 
 
 func _process(delta: float) -> void:

@@ -157,7 +157,7 @@ snagbill_count = 22
 thawjaw_count = 4
 
 [node name="Avatar" parent="." instance=ExtResource("11")]
-show_debug_label = false
+show_debug_label = true
 
 [node name="Hand" parent="." instance=ExtResource("12")]
 

@@ -103,6 +103,19 @@ func _ready() -> void:
 			print("REACH %s | faith %.2f pop %d | radius %.1f m | %.0f px" % [
 				v.display_name, v.faith_fraction, v.population, r, px])
 
+	# SHOT_DUMP_AVATAR: where the player's creature actually is, and whether
+	# that is above water.
+	if OS.get_environment("SHOT_DUMP_AVATAR") != "":
+		var av := _find_named(self, "Avatar")
+		var isl := _find_named(self, "Island")
+		if av is Node3D:
+			var p3: Vector3 = (av as Node3D).global_position
+			var ground := 0.0
+			if isl != null and isl.has_method("sample_height"):
+				ground = isl.call("sample_height", Vector2(p3.x, p3.z))
+			print("AVATAR at %s | terrain here %.2f m | %s" % [
+				p3, ground, "ON LAND" if ground > 0.5 else "UNDER WATER / IN THE SEA"])
+
 	# SHOT_SHOW: comma-separated node names under the loaded scene to force
 	# visible before the capture. Panels bound to a keypress cannot otherwise
 	# be photographed by a harness that has no keyboard.
