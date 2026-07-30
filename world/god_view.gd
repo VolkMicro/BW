@@ -324,6 +324,9 @@ func _build_far_sea() -> void:
 # this registration), real spawned Villagers, one Calling Stone each.
 # ---------------------------------------------------------------------------
 func _place_villages_and_villagers() -> void:
+	# Static state does not reset itself when the scene changes; a second
+	# island inheriting the first one's full pool would be baffling.
+	Mana.reset()
 	var taken: Array[Vector2] = []
 
 	# The three authored villages come first. They are authored not because
@@ -746,6 +749,10 @@ func _process(delta: float) -> void:
 			_voice_log.push_line(speaker, tr(String(beat["text"])))
 			_opening_index += 1
 
+	# Prayer accrues every frame; everything that READS it is on the slow
+	# tick. See systems/faith/mana.gd.
+	Mana.tick(delta)
+
 	_slow_tick -= delta
 	if _slow_tick > 0.0:
 		return
@@ -835,6 +842,20 @@ func _on_rite_cast(rite_id: StringName, confidence: float) -> void:
 
 	if _first_lessons != null:
 		_first_lessons.saw_rite_cast = true
+	# PAY FOR IT. Checked after the target is known so that a rite which was
+	# going to be refused for being out of reach does not also cost mana —
+	# the player gets one failure, not two.
+	if not Mana.spend(rite_id):
+		_hand.request_refusal_flash(&"not_enough_mana")
+		MusicDirector.play_rite_outcome(&"rite_refused", world_pos)
+		Voices.react(&"mana_spent_out", {
+			"rite_id": rite_id,
+			"village_id": target.id,
+			"village_name": target.display_name,
+		})
+		_refresh_objective()
+		return
+
 	if not _first_rite_cast:
 		_first_rite_cast = true
 		Voices.react(&"first_rite_cast", {"rite_id": rite_id, "village_id": target.id})
@@ -958,6 +979,13 @@ func _sanctum_for(village_id: StringName) -> Sanctum:
 ## not care whether the player is being kind about it. What it costs is
 ## repetition — nine or ten clean rites while she is busy elsewhere.
 func _contest_rite(v: Village, rite_id: StringName, confidence: float, world_pos: Vector3) -> void:
+	if not Mana.spend(rite_id):
+		_hand.request_refusal_flash(&"not_enough_mana")
+		MusicDirector.play_rite_outcome(&"rite_refused", world_pos)
+		Voices.react(&"mana_spent_out", {
+			"rite_id": rite_id, "village_id": v.id, "village_name": v.display_name,
+		})
+		return
 	var quality := (0.5 + 0.5 * clampf(confidence, 0.0, 1.0)) * Godhood.reclaim_multiplier()
 	var amount: float = float(HELP_RITE_AMOUNT.get(rite_id,
 		TERROR_RITE_AMOUNT.get(rite_id, 4.0)))
@@ -1311,6 +1339,10 @@ func _build_objective_text() -> String:
 		if Stockpile.get_amount(v, &"wood") <= NEED_WARNING_LEVEL:
 			cold += 1
 	lines.append(tr("You are %s.") % tr(Godhood.title()))
+	# Mana, in words the player can act on: how much they have, how fast the
+	# island is praying it back, and — when they are short — what that buys.
+	lines.append(tr("Prayer: %d of %d, +%.1f a second.")
+		% [int(round(Mana.amount())), int(round(Mana.capacity())), Mana.income_per_sec()])
 	if lost > 0:
 		lines.append(tr("Pohjola holds %d. A rite cast over one pries her grip loose — it takes several.") % lost)
 	if hungry > 0 or cold > 0:

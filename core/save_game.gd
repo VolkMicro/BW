@@ -67,6 +67,7 @@ static func save() -> bool:
 	var data := {
 		"version": VERSION,
 		"naklon": Naklon.value,
+		"mana": Mana.amount(),
 		"epithets": GameState.epithets.duplicate(),
 		"relics_held": _to_strings(GameState.relics_held),
 		"scrolls_known": _to_strings(GameState.scrolls_known),
@@ -116,6 +117,9 @@ static func load_into_world() -> bool:
 		return false
 
 	Naklon.value = float(data.get("naklon", Naklon.value))
+	# After the villages are restored, not before: the pool's ceiling is
+	# derived from godhood, which is derived from their faith.
+	var saved_mana: float = float(data.get("mana", Mana.amount()))
 	GameState.epithets = _to_string_array(data.get("epithets", []))
 	GameState.relics_held = _to_stringname_array(data.get("relics_held", []))
 	GameState.scrolls_known = _to_stringname_array(data.get("scrolls_known", []))
@@ -159,6 +163,7 @@ static func load_into_world() -> bool:
 		GameState.add_devotion(v.id, float(entry.get("devotion", 0.0)))
 		GameState.set_faith_fraction(v.id, float(entry.get("faith_fraction", 0.0)))
 
+	Mana.set_amount(saved_mana)
 	return true
 
 

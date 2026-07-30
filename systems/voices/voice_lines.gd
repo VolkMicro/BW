@@ -78,6 +78,7 @@ const _PACING_COOLDOWN_MSEC := {
 	&"gather_stores_full": 9000,
 	&"gather_stripped": 25000,
 	&"avatar_sent": 12000,
+	&"mana_spent_out": 10000,
 	&"village_grew": 20000,
 	&"village_shrank": 20000,
 	&"sigil_not_learned": 7000,
@@ -1008,6 +1009,20 @@ func _build_pairs() -> void:
 		_p("snl3",
 			"You know the shape of that one but not the whole of it. There is a scroll for it out there.",
 			"There is always a scroll. There is never a scroll where I am standing."),
+	]
+
+	# mana_spent_out: {rite_id, village_id, village_name} — the god reached
+	# for a miracle and there was nothing in the pool to pay with.
+	_pairs[&"mana_spent_out"] = [
+		_p("mo1",
+			"Nothing left to spend. Prayer refills it, and prayer is a thing people do when they are fed and warm.",
+			"Or terrified! Terrified people pray CONSTANTLY. I am simply pointing at the other lever."),
+		_p("mo2",
+			"You reached for it and the well was dry. Wait — the island is praying, and it is praying into you.",
+			"Waiting. My least favourite miracle."),
+		_p("mo3",
+			"Not enough. Take a village further and the pool both fills faster and holds more.",
+			"Both! Compound interest! Domovoi, is THIS what you do all day?"),
 	]
 
 	# avatar_sent: {stage} — the god points, the creature goes.
