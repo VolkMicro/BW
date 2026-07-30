@@ -136,7 +136,64 @@ const HOUSE_MODELS := [
 const LANDMARK_MODELS := [
 	"res://assets/models/village/Blacksmith.obj",
 	"res://assets/models/village/Inn.obj",
+	# The three that follow are the SAME artist's pack in glTF. Mill, Sawmill
+	# and Stable in OBJ reproducibly crashed Godot 4.3's OBJ importer and were
+	# deleted from the repo; glTF goes through a different importer entirely
+	# and loads them without trouble. See assets/models/village_gltf/LICENSE.md.
+	"res://assets/models/village_gltf/Mill.glb",
+	"res://assets/models/village_gltf/Barracks.glb",
+	"res://assets/models/village_gltf/BellTower.glb",
 ]
+
+## MEASURED, NOT GUESSED — and necessary, because the poly.pizza mirror
+## normalises every model to a different size. Measured heights as imported,
+## against the houses already in the village at 3.3 m:
+##
+##   Mill 4.80   BellTower 4.76   Barracks 1.85   Sawmill 0.59
+##   Well 1.25   MarketStalls 0.55   VillageMarket 0.55   Cart 0.80
+##   Fence 1.10 (5.89 wide)
+##
+## A barracks the size of a wheelbarrow and a mill shorter than the cottages
+## it grinds for are not stylistic choices, they are an artefact of how the
+## mirror exports. These factors put each one at a height that makes sense
+## beside a 3.3 m house.
+const MODEL_SCALE := {
+	"Mill": 1.5,          # ~7 m — taller than the houses, as a mill should be
+	"BellTower": 1.9,     # ~9 m — the thing you see first from the air
+	"Barracks": 2.2,      # ~4 m, long and low
+	"Sawmill": 2.0,       # a saw platform, not a building
+	"Well": 1.8,
+	"MarketStalls": 2.0,
+	"VillageMarket": 2.0,
+	"Cart": 1.6,
+	"Fence": 1.3,         # ~1.4 m tall, 7.6 m wide per section
+}
+
+## Small things that make a settlement look lived in rather than deployed: a
+## well people draw from, a market, a cart somebody left out. One of each per
+## village at most, and only where there is room.
+##
+## Deliberately NOT a church. Every "church"/"chapel" model in these packs
+## carries a cross, and `docs/audit/respect_audit.md` forbids real sacred
+## symbols — which is also why the game builds its own temples procedurally
+## (world/village/village_architecture.gd) instead of downloading one.
+const PROP_MODELS := [
+	"res://assets/models/village_gltf/Well.glb",
+	"res://assets/models/village_gltf/MarketStalls.glb",
+	"res://assets/models/village_gltf/Cart.glb",
+	"res://assets/models/village_gltf/VillageMarket.glb",
+	"res://assets/models/village_gltf/Sawmill.glb",
+]
+## How many fence sections ring a village. Cheap, and the single strongest
+## signal that the ground inside belongs to somebody.
+## Fence RUNS, not sections. A single 7.6 m section on a 195 m perimeter is a
+## stick in a field; three or four in a row read as somebody's boundary. This
+## was visible immediately in the first render and is the difference between
+## a fenced village and a village with litter around it.
+@export var fence_runs: int = 4
+@export var fence_run_length_min: int = 3
+@export var fence_run_length_max: int = 6
+const FENCE_MODEL := "res://assets/models/village_gltf/Fence.glb"
 
 ## How many dwellings this village should have standing.
 ##
@@ -212,33 +269,117 @@ func _build_houses() -> void:
 
 ## A single larger building per village, placed just outside the house ring.
 func _place_landmark(centre: Vector2, placed: Array[Vector3], index: int) -> void:
-	var path: String = LANDMARK_MODELS[index % LANDMARK_MODELS.size()]
-	var mesh: Mesh = _load_building(path)
-	if mesh == null:
-		return
+	# One landmark per village, cycling through the list, so fifteen
+	# settlements do not all read as the same silhouette from the air. With
+	# six kinds and fifteen villages no two neighbours share one.
+	_place_model(LANDMARK_MODELS[index % LANDMARK_MODELS.size()], centre, placed,
+		house_ring_outer * 0.75, house_ring_outer * 1.25, house_min_gap * 1.6)
+	# Then the small stuff. A different prop per village for the same reason,
+	# plus a well for everyone — a settlement with no water source reads wrong
+	# even to somebody who could not say why.
+	_place_model(PROP_MODELS[0], centre, placed,
+		house_ring_inner * 0.35, house_ring_inner * 0.8, house_min_gap * 0.8)
+	_place_model(PROP_MODELS[1 + index % (PROP_MODELS.size() - 1)], centre, placed,
+		house_ring_inner * 0.9, house_ring_outer * 0.8, house_min_gap)
+	_place_fence(centre, placed)
+
+
+## Puts one model down somewhere in a ring around the village, on ground that
+## can take it and clear of everything already placed.
+func _place_model(path: String, centre: Vector2, placed: Array[Vector3],
+		ring_min: float, ring_max: float, gap: float) -> Node3D:
 	for _try in 40:
 		var a := _rng.randf() * TAU
-		var r := _rng.randf_range(house_ring_outer * 0.75, house_ring_outer * 1.25)
+		var r := _rng.randf_range(ring_min, ring_max)
 		var xz := centre + Vector2(cos(a), sin(a)) * r
 		if not _buildable(xz):
 			continue
 		var pos := Vector3(xz.x, _height(xz), xz.y)
 		var clear := true
 		for p in placed:
-			if p.distance_to(pos) < house_min_gap * 1.6:
+			if p.distance_to(pos) < gap:
 				clear = false
 				break
 		if not clear:
 			continue
+		var node := _spawn_model(path, pos, (centre - xz).angle() + _rng.randf_range(-0.5, 0.5))
+		if node == null:
+			return null
+		placed.append(pos)
+		return node
+	return null
+
+
+## A broken ring of fence around the settlement. Broken on purpose: gaps are
+## where the paths are, and a perfect ring reads as a stockade rather than as
+## somebody's boundary.
+func _place_fence(centre: Vector2, placed: Array[Vector3]) -> void:
+	if fence_runs <= 0:
+		return
+	var radius := house_ring_outer * 1.05
+	# One section is 5.89 m as imported, scaled by MODEL_SCALE. Stepping by
+	# exactly that arc keeps the posts of adjacent sections meeting.
+	var section_width: float = 5.89 * float(MODEL_SCALE.get("Fence", 1.0))
+	var step: float = section_width / radius
+	for run in fence_runs:
+		# Runs are spread around the ring with jitter, so the gaps between
+		# them (where the paths are) fall in different places per village.
+		var start: float = TAU * (float(run) + _rng.randf_range(-0.18, 0.18)) / float(fence_runs)
+		var count: int = _rng.randi_range(fence_run_length_min, fence_run_length_max)
+		for i in count:
+			var a: float = start + float(i) * step
+			var xz: Vector2 = centre + Vector2(cos(a), sin(a)) * radius
+			if not _buildable(xz):
+				continue
+			var pos := Vector3(xz.x, _height(xz), xz.y)
+			# The section runs ALONG the ring, so it is turned to face out.
+			_spawn_model(FENCE_MODEL, pos, a)
+
+
+## OBJ and glTF are loaded by completely different importers and need
+## completely different handling.
+##
+## An .obj arrives as a Mesh whose .mtl carries LINEAR colour values, which is
+## why they need the ^(1/2.2) correction below — this project spent three
+## separate debugging sessions on models importing near-black before that was
+## understood. A .glb arrives as a PackedScene whose materials are already
+## correct, and applying the same correction to it would wash every one of
+## them out. So: instantiate the scene, touch nothing.
+func _spawn_model(path: String, pos: Vector3, yaw: float) -> Node3D:
+	var node: Node3D = null
+	if path.ends_with(".glb") or path.ends_with(".gltf"):
+		var packed: PackedScene = load(path)
+		if packed == null:
+			push_warning("VillageBuildings: could not load %s" % path)
+			return null
+		node = packed.instantiate()
+		_set_visibility_range(node, house_visibility_range_end)
+		var factor: float = float(MODEL_SCALE.get(path.get_file().get_basename(), 1.0))
+		if not is_equal_approx(factor, 1.0):
+			node.scale = Vector3.ONE * factor
+	else:
+		var mesh: Mesh = _load_building(path)
+		if mesh == null:
+			return null
 		var mi := MeshInstance3D.new()
-		mi.name = "Landmark_%s" % path.get_file().get_basename()
 		mi.mesh = mesh
 		mi.visibility_range_end = house_visibility_range_end
-		add_child(mi)
-		mi.global_position = pos
-		mi.rotation.y = (centre - xz).angle() + _rng.randf_range(-0.5, 0.5)
-		placed.append(pos)
-		return
+		node = mi
+	node.name = "Prop_%s" % path.get_file().get_basename()
+	add_child(node)
+	node.global_position = pos
+	node.rotation.y = yaw
+	return node
+
+
+## visibility_range_end lives on each GeometryInstance3D, and an imported glTF
+## scene is a tree of them. Without this a village's props are submitted from
+## the far side of the island.
+func _set_visibility_range(n: Node, range_end: float) -> void:
+	if n is GeometryInstance3D:
+		(n as GeometryInstance3D).visibility_range_end = range_end
+	for c in n.get_children():
+		_set_visibility_range(c, range_end)
 
 var _house_transforms: Array[Transform3D] = []
 var _house_colors: Array[Color] = []
