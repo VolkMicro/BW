@@ -137,11 +137,14 @@ static func plan(terrain: IslandTerrain, count: int, seed_value: int,
 		taken.append(xz)
 
 		var culture: StringName = CULTURE_ORDER[out.size() % CULTURE_ORDER.size()]
-		var display: String = _name_for(culture, terrain, xz, c.centre, rng)
+		var named: Dictionary = _name_for(culture, terrain, xz, c.centre, rng)
 		out.append({
-			"id": StringName("isle_%s" % display.to_snake_case()),
+			# Always from the ENGLISH name: the id ends up in save files, and
+			# one that changed with the locale would make a save written in
+			# Russian unloadable in English.
+			"id": StringName("isle_%s" % String(named.en).to_snake_case()),
 			"culture": culture,
-			"display": display,
+			"display": named.display,
 			"xz": xz,
 			# Population varies with how good the ground is: the flat, low,
 			# sheltered sites support more people, which gives the player a
@@ -184,12 +187,29 @@ static func _relief(terrain: IslandTerrain, xz: Vector2) -> Dictionary:
 	return {"centre": centre, "spread": hi - lo}
 
 
+## Returns {"en": ..., "display": ...}.
+##
+## The English name is what the village's ID is built from, so it has to be
+## stable whatever language the game is being played in — an id that changed
+## with the locale would make every save unloadable in the other language.
+## The display name goes through the translation table twice, once for the
+## culture stem and once for the landform word, so a Russian player gets
+## "Фенрайт-Лощина" rather than "Fenrayt Hollow".
 static func _name_for(culture: StringName, terrain: IslandTerrain, xz: Vector2,
-		centre: float, rng: RandomNumberGenerator) -> String:
+		centre: float, rng: RandomNumberGenerator) -> Dictionary:
 	var stems: Array = CULTURE_STEMS.get(culture, CULTURE_STEMS[&"fenrayt"])
 	var stem: String = stems[rng.randi() % stems.size()]
 	var words: Array = _landform(terrain, xz, centre)
-	return "%s %s" % [stem, words[rng.randi() % words.size()]]
+	var word: String = words[rng.randi() % words.size()]
+	return {
+		"en": "%s %s" % [stem, word],
+		# The join itself is translated: Russian settlement names of this shape
+		# take a hyphen, English a space.
+		# TranslationServer, not tr(): tr() is an Object method and this is a
+		# static function on a RefCounted that is never instanced.
+		"display": TranslationServer.translate("%s %s") % [
+			TranslationServer.translate(stem), TranslationServer.translate(word)],
+	}
 
 
 ## Which family of landform words fits this ground. Measured, not guessed.

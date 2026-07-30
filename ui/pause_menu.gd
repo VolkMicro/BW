@@ -64,7 +64,7 @@ func _build() -> void:
 	margin.add_child(box)
 
 	var title := Label.new()
-	title.text = "THE ISLAND WAITS"
+	title.text = tr("THE ISLAND WAITS")
 	title.add_theme_font_size_override("font_size", 26)
 	box.add_child(title)
 
@@ -75,11 +75,11 @@ func _build() -> void:
 
 	box.add_child(HSeparator.new())
 
-	_add_button(box, "Back to the island", _on_resume)
-	_add_button(box, "Write it down (save)", _on_save)
-	_load_button = _add_button(box, "Go back to the last writing (load)", _on_load)
+	_add_button(box, tr("Back to the island"), _on_resume)
+	_add_button(box, tr("Write it down (save)"), _on_save)
+	_load_button = _add_button(box, tr("Go back to the last writing (load)"), _on_load)
 	box.add_child(HSeparator.new())
-	_add_button(box, "Leave", _on_quit)
+	_add_button(box, tr("Leave"), _on_quit)
 
 
 func _add_button(parent: Node, text: String, handler: Callable) -> Button:
@@ -106,8 +106,8 @@ func _unhandled_input(event: InputEvent) -> void:
 
 
 func open() -> void:
-	_status.text = "Saved: %s" % ("yes, there is a writing to go back to" if SaveGame.has_save()
-		else "nothing written down yet")
+	_status.text = tr("Saved: %s") % (tr("yes, there is a writing to go back to") if SaveGame.has_save()
+		else tr("nothing written down yet"))
 	_load_button.disabled = not SaveGame.has_save()
 	visible = true
 	get_tree().paused = true
@@ -125,18 +125,18 @@ func _on_resume() -> void:
 
 func _on_save() -> void:
 	if SaveGame.save():
-		_status.text = "Written down."
+		_status.text = tr("Written down.")
 		_load_button.disabled = false
 	else:
-		_status.text = "It would not write. Check that the save directory is writable."
+		_status.text = tr("It would not write. Check that the save directory is writable.")
 
 
 func _on_load() -> void:
 	if SaveGame.load_into_world():
-		_status.text = "Back to the last writing."
+		_status.text = tr("Back to the last writing.")
 		close()
 	else:
-		_status.text = "That writing could not be read — see the log."
+		_status.text = tr("That writing could not be read — see the log.")
 
 
 func _on_quit() -> void:

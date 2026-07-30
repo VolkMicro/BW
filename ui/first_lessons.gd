@@ -154,7 +154,7 @@ func _advance() -> void:
 
 
 func _show(text: String) -> void:
-	_label.text = text
+	_label.text = tr(text)
 	var tw := create_tween()
 	tw.tween_property(_panel, "modulate:a", 1.0, 0.4)
 

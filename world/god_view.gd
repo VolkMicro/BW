@@ -360,7 +360,10 @@ func _place_villages_and_villagers() -> void:
 
 		var v := Village.new()
 		v.id = entry.id
-		v.display_name = entry.display
+		# The three authored villages carry English display names in
+		# VILLAGE_DEFS; the twelve planned ones were already localised by
+		# SettlementPlanner. Both paths end up translated here.
+		v.display_name = tr(entry.display)
 		v.culture_id = entry.culture
 		v.position_on_island = xz
 		v.population = entry.population
@@ -1121,20 +1124,20 @@ func _declare_ending(ending: int, converted: int, lost: int, total: int) -> void
 	var body := ""
 	match ending:
 		Ending.VICTORY:
-			title = "THE ISLAND IS YOURS"
-			body = "All %d villages say your name without being asked for it." % total
+			title = tr("THE ISLAND IS YOURS")
+			body = tr("All %d villages say your name without being asked for it.") % total
 		Ending.DEFEAT:
-			title = "THE ISLAND IS HERS"
-			body = "Every village on this rock answers to Louhi. You are still awake. That is the whole of what you are now."
-	var named := "Nobody got around to naming you."
+			title = tr("THE ISLAND IS HERS")
+			body = tr("Every village on this rock answers to Louhi. You are still awake. That is the whole of what you are now.")
+	var named := tr("Nobody got around to naming you.")
 	if not GameState.epithets.is_empty():
 		# GameState.epithets IS the player's real scorecard — core/game_state.gd
 		# says so in its own doc comment, and until now nothing ever showed it.
 		var earned: PackedStringArray = PackedStringArray()
 		for e in GameState.epithets:
 			earned.append("    " + String(e))
-		named = "They called you:\n" + "\n".join(earned)
-	_end_card.text = "%s\n\n%s\n\n%s\n\nNothing further will happen here." % [title, body, named]
+		named = tr("They called you:\n") + "\n".join(earned)
+	_end_card.text = tr("%s\n\n%s\n\n%s\n\nNothing further will happen here.") % [title, body, named]
 	_end_card.visible = true
 	match ending:
 		Ending.VICTORY:
@@ -1160,7 +1163,7 @@ func _refresh_objective() -> void:
 
 func _build_objective_text() -> String:
 	if _ending != Ending.NONE:
-		return "This island is finished."
+		return tr("This island is finished.")
 
 	var total := 0
 	var mine := 0
@@ -1183,17 +1186,17 @@ func _build_objective_text() -> String:
 			target = v
 
 	var lines: PackedStringArray = PackedStringArray()
-	var header := "Yours: %d of %d villages." % [mine, total]
+	var header := tr("Yours: %d of %d villages.") % [mine, total]
 	if lost > 0:
-		header += "   Lost to Pohjola: %d." % lost
+		header += tr("   Lost to Pohjola: %d.") % lost
 	lines.append(header)
 
 	if target != null:
 		var pct := int(round(target.faith_fraction * 100.0))
 		if target.faith_fraction >= Reach.TERROR_CEILING - 0.005:
-			lines.append("Now — %s (%d%%): fear has carried them as far as fear goes. The rest has to be given: harvest, rain, mending, a ward." % [target.display_name, pct])
+			lines.append(tr("Now — %s (%d%%): fear has carried them as far as fear goes. The rest has to be given: harvest, rain, mending, a ward.") % [target.display_name, pct])
 		else:
-			lines.append("Now — %s (%d%% theirs): hold right mouse and drag a rite over it." % [target.display_name, pct])
+			lines.append(tr("Now — %s (%d%% theirs): hold right mouse and drag a rite over it.") % [target.display_name, pct])
 
 	# WHAT THE ISLAND NEEDS, in words the player can act on.
 	#
@@ -1213,20 +1216,20 @@ func _build_objective_text() -> String:
 			hungry += 1
 		if Stockpile.get_amount(v, &"wood") <= NEED_WARNING_LEVEL:
 			cold += 1
-	lines.append("You are %s." % Godhood.title())
+	lines.append(tr("You are %s.") % tr(Godhood.title()))
 	if lost > 0:
-		lines.append("Pohjola holds %d. A rite cast over one pries her grip loose — it takes several." % lost)
+		lines.append(tr("Pohjola holds %d. A rite cast over one pries her grip loose — it takes several.") % lost)
 	if hungry > 0 or cold > 0:
 		var parts: PackedStringArray = PackedStringArray()
 		if hungry > 0:
-			parts.append("%d hungry (harvest)" % hungry)
+			parts.append(tr("%d hungry (harvest)") % hungry)
 		if cold > 0:
-			parts.append("%d out of firewood (lumber)" % cold)
-		lines.append("On the island: " + ", ".join(parts) + ".")
+			parts.append(tr("%d out of firewood (lumber)") % cold)
+		lines.append(tr("On the island: ") + ", ".join(parts) + ".")
 
 	var active_title := _current_quest_title(target)
 	if active_title != "":
-		lines.append("Spoken of: \"%s\"" % active_title)
+		lines.append(tr("Spoken of: \"%s\"") % active_title)
 
 	if _louhi_note != "":
 		lines.append(_louhi_note)
@@ -1305,8 +1308,13 @@ func _refresh_help_label() -> void:
 	if _help_label == null:
 		return
 	var preset_text: String = GraphicsPreset.preset_name(_graphics_preset.current()) if _graphics_preset != null else "Low"
+	# The walkable Sanctum's village is substituted rather than spelled out:
+	# the line used to name Fenrayt Hollow in English prose, which a
+	# translation would have had to hard-code in every language.
+	var walkable := GameState.get_village(&"isle_fenrayt_hollow")
+	var walkable_name: String = walkable.display_name if walkable != null else "Fenrayt Hollow"
 	_help_label.text = (
-		"Mouse: aim the Hand   Hold Left Click: grip/throw   Hold Right Click + drag: draw a rite over a village\n" +
-		"Arrows: pan   Scroll: zoom   Middle-drag: orbit   3: rites you know (shapes)   Esc: pause / save / leave   1: god view   2: walk into Fenrayt Hollow's Sanctum (Enter to interact)\n" +
-		"[ / ]: nudge Naklon toward Mercy / Cruelty   F / G: praise / chastise the Avatar   L: force Louhi to re-evaluate now   P: graphics preset (now: %s)" % preset_text
+		tr("Mouse: aim the Hand   Hold Left Click: grip/throw   Hold Right Click + drag: draw a rite over a village") + "\n" +
+		tr("Arrows: pan   Scroll: zoom   Middle-drag: orbit   3: rites you know (shapes)   Esc: pause / save / leave   1: god view   2: walk into %s's Sanctum (Enter to interact)") % walkable_name + "\n" +
+		tr("[ / ]: nudge Naklon toward Mercy / Cruelty   F / G: praise / chastise the Avatar   L: force Louhi to re-evaluate now   P: graphics preset (now: %s)") % tr(preset_text)
 	)

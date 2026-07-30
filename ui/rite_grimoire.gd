@@ -107,7 +107,7 @@ func _draw() -> void:
 		return
 	var w: float = size.x
 	draw_rect(Rect2(Vector2.ZERO, Vector2(w, custom_minimum_size.y)), PANEL_COLOR, true)
-	draw_string(_font, Vector2(PAD, PAD + 16.0), "RITES", HORIZONTAL_ALIGNMENT_LEFT, -1, 18,
+	draw_string(_font, Vector2(PAD, PAD + 16.0), tr("RITES"), HORIZONTAL_ALIGNMENT_LEFT, -1, 18,
 		Color(0.95, 0.93, 0.85))
 
 	var y: float = PAD + 30.0
@@ -139,18 +139,18 @@ func _draw_row(row: Dictionary, at: Vector2, panel_width: float) -> void:
 			draw_line(tip, tip + back + side, line_color, 2.2, true)
 			draw_line(tip, tip + back - side, line_color, 2.2, true)
 
-	var name_text: String = String(row.id).replace("_", " ")
+	var name_text: String = tr(String(row.id).replace("_", " "))
 	var kind_color: Color = TERROR_COLOR if terror_rites.has(row.id) else GIFT_COLOR
-	var kind_text: String = "terror" if terror_rites.has(row.id) else "gift"
+	var kind_text: String = tr("terror") if terror_rites.has(row.id) else tr("gift")
 	if not known:
 		kind_color = LOCKED_COLOR
-		kind_text = "not yours yet"
+		kind_text = tr("not yours yet")
 
 	var tx: float = at.x + TEXT_LEFT
 	draw_string(_font, Vector2(tx, at.y + 18.0), name_text,
 		HORIZONTAL_ALIGNMENT_LEFT, -1, 17, KNOWN_COLOR if known else LOCKED_COLOR)
 	draw_string(_font, Vector2(tx, at.y + 36.0), kind_text,
 		HORIZONTAL_ALIGNMENT_LEFT, -1, 13, kind_color)
-	draw_multiline_string(_font, Vector2(tx, at.y + 54.0), row.desc,
+	draw_multiline_string(_font, Vector2(tx, at.y + 54.0), tr(row.desc),
 		HORIZONTAL_ALIGNMENT_LEFT, panel_width - tx - PAD, 13, 3,
 		Color(0.78, 0.80, 0.86) if known else LOCKED_COLOR)

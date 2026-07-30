@@ -130,9 +130,9 @@ const TIRED_EFFECTIVENESS := 0.45
 func _caption(v: Village) -> String:
 	if v.loyal_to_rival:
 		var grip: float = Reclaim.grip_of(v)
-		return "%s\nPohjola's — her grip %d%%" % [v.display_name, int(round(grip * 100.0))]
+		return "%s\n%s" % [v.display_name, tr("Pohjola's — her grip %d%%") % int(round(grip * 100.0))]
 	if v.is_fully_converted():
-		return "%s\nyours" % v.display_name
+		return "%s\n%s" % [v.display_name, tr("yours")]
 	# FATIGUE, ABOVE EVERYTHING ELSE THAT IS NOT TERMINAL.
 	#
 	# This is the game's central rhythm and it was completely invisible.
@@ -144,13 +144,13 @@ func _caption(v: Village) -> String:
 	var tired: float = minf(Reach.effectiveness(v.id, &"help"),
 		Reach.effectiveness(v.id, &"terror"))
 	if tired < TIRED_EFFECTIVENESS:
-		return "%s\nheard enough for now — %d%% yours" % [
-			v.display_name, int(round(v.faith_fraction * 100.0))]
+		return "%s\n%s" % [v.display_name,
+			tr("heard enough for now — %d%% yours") % int(round(v.faith_fraction * 100.0))]
 	if Stockpile.get_amount(v, &"food") <= NEED_WARNING_LEVEL:
-		return "%s\nhungry — %d%% yours" % [v.display_name, int(round(v.faith_fraction * 100.0))]
+		return "%s\n%s" % [v.display_name, tr("hungry — %d%% yours") % int(round(v.faith_fraction * 100.0))]
 	if Stockpile.get_amount(v, &"wood") <= NEED_WARNING_LEVEL:
-		return "%s\nno firewood — %d%% yours" % [v.display_name, int(round(v.faith_fraction * 100.0))]
-	return "%s\n%d%% yours" % [v.display_name, int(round(v.faith_fraction * 100.0))]
+		return "%s\n%s" % [v.display_name, tr("no firewood — %d%% yours") % int(round(v.faith_fraction * 100.0))]
+	return "%s\n%s" % [v.display_name, tr("%d%% yours") % int(round(v.faith_fraction * 100.0))]
 
 
 func _tint(v: Village) -> Color:
