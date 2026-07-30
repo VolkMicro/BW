@@ -736,7 +736,10 @@ func _on_rite_cast(rite_id: StringName, confidence: float) -> void:
 	# Confidence never drops below the recognizer's 0.75 threshold, so this
 	# is a 0.875..1.0 nudge — a scruffy sigil is worth slightly less, it is
 	# not a punishment.
-	var quality := 0.5 + 0.5 * clampf(confidence, 0.0, 1.0)
+	# Godhood: a god twelve villages deep casts harder than one nobody has
+	# heard of. See systems/faith/godhood.gd — this is the player's half of
+	# the compounding the endgame needs, mirroring Louhi's shortening clock.
+	var quality := (0.5 + 0.5 * clampf(confidence, 0.0, 1.0)) * Godhood.rite_multiplier()
 	if HELP_RITE_AMOUNT.has(rite_id):
 		# Fires Voices &"village_helped" and shifts Naklon toward mercy —
 		# both already implemented in systems/faith/reach.gd:146-154.
@@ -836,7 +839,7 @@ func _sanctum_for(village_id: StringName) -> Sanctum:
 ## not care whether the player is being kind about it. What it costs is
 ## repetition — nine or ten clean rites while she is busy elsewhere.
 func _contest_rite(v: Village, rite_id: StringName, confidence: float, world_pos: Vector3) -> void:
-	var quality := 0.5 + 0.5 * clampf(confidence, 0.0, 1.0)
+	var quality := (0.5 + 0.5 * clampf(confidence, 0.0, 1.0)) * Godhood.reclaim_multiplier()
 	var amount: float = float(HELP_RITE_AMOUNT.get(rite_id,
 		TERROR_RITE_AMOUNT.get(rite_id, 4.0)))
 	RiteVFX.spawn(rite_id, world_pos, self)
@@ -870,7 +873,7 @@ func _village_in_reach_of(world_pos: Vector3) -> Village:
 			continue
 		var origin := Vector3(v.position_on_island.x, 0.0, v.position_on_island.y)
 		var d := origin.distance_to(flat)
-		if d <= Reach.radius_for_village(v.id) and d < best_d:
+		if d <= Reach.radius_for_village(v.id) + Godhood.reach_bonus() and d < best_d:
 			best_d = d
 			best = v
 	return best
@@ -1135,6 +1138,7 @@ func _build_objective_text() -> String:
 			hungry += 1
 		if Stockpile.get_amount(v, &"wood") <= NEED_WARNING_LEVEL:
 			cold += 1
+	lines.append("You are %s." % Godhood.title())
 	if lost > 0:
 		lines.append("Pohjola holds %d. A rite cast over one pries her grip loose — it takes several." % lost)
 	if hungry > 0 or cold > 0:

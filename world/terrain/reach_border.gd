@@ -32,7 +32,11 @@ func _ready() -> void:
 func _process(_delta: float) -> void:
 	if village_id == &"":
 		return
-	var radius := Reach.radius_for_village(village_id)
+	# The ring is a PROMISE about where a rite will land, so it has to include
+	# the same godhood bonus world/god_view.gd applies when it decides which
+	# village a rite hit. A ring that disagrees with the rule teaches the
+	# player the wrong edge, which is worse than drawing no ring at all.
+	var radius := Reach.radius_for_village(village_id) + Godhood.reach_bonus()
 	if not is_equal_approx(radius, _last_radius):
 		_last_radius = radius
 		_update_ring(radius)

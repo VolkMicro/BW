@@ -51,11 +51,48 @@ before inventing any name.
 
 *Update this section every commit.*
 
-**Status: Phase 1 DONE. Island is 1200 m, cached, chunked, correctly shaped
-at that scale, and carries 15 villages planned onto the real terrain.
-Next: Phase 2, daily life.**
+**Status: Phases 1, 2, 3 and 5 are done. The game saves, pauses, teaches its
+own opening, and both gods now compound toward the one-god ending.**
+
+The remaining known gaps, in the order they matter:
+
+1. **Nobody has measured the frame rate on the target hardware.** Every
+   number in this file was taken under xvfb on a software rasteriser, which
+   says nothing about the Intel integrated graphics this is for. This is the
+   top risk in the project and it cannot be closed from here.
+2. Phase 4 (hunting) was pulled forward into Phase 2 and is done; what is
+   left of the original Phase 4 is wildlife as a MultiMesh crowd if the 74
+   creature nodes turn out to cost too much.
+3. Island shape items 3 (inland lakes) and 4 (cliffs) from section 7.
+4. Rivers still read faintly from god view.
+5. The temple hall interior is a dark void up close.
+
+Run every test before committing:
+```
+for t in reclaim save growth godhood; do
+  godot --headless --path . tests/${t}_test.tscn
+done
+```
 
 Done since the roadmap was written:
+- **PHASE 5: the player god compounds too** (`systems/faith/godhood.gd`).
+  Louhi's half of the compounding landed with her shortening clock; the
+  player's half was missing entirely. `Reach.radius_for_village()` grows with
+  a village's OWN converts, so a god holding twelve villages reached no
+  further into the thirteenth than a god holding none — twelve villages of
+  worshippers bought nothing outside their own fences, and the endgame got
+  HARDER the closer you came to winning.
+  Godhood is measured in believing heads over the island's whole population,
+  and buys stronger rites (+45% at full), further Reach (+34 m) and harder
+  prying at Louhi's grip (+80%). A village she holds contributes zero but is
+  not counted negative — charging twice for a loss makes a bad position
+  unrecoverable, which is exactly what the reclaim mechanic exists to
+  prevent. The HUD names it in words ("You are believed in") rather than as
+  a percentage, since there is no other raw stat on screen.
+  `world/terrain/reach_border.gd` adds the same bonus: the ring is a PROMISE
+  about where a rite will land, and a ring that disagrees with the rule
+  teaches the wrong edge.
+  Covered by `tests/godhood_test.tscn`.
 - **PHASE 3: villages grow and shrink.** A comfortably fed village gains a
   person every ~2.5 minutes; a starving one loses one faster than that. This
   was the slow variable the daily simulation was missing — without it stores
