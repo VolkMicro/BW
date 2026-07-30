@@ -57,6 +57,8 @@ const SPEAKER_COLORS: Dictionary = {
 	&"domovoi": "d8a15e",
 	&"hiisi": "8fc48c",
 }
+## Translated at display time (see _rebuild). The keys stay English because
+## every trigger, save file and log line refers to the speakers by these ids.
 const SPEAKER_NAMES: Dictionary = {
 	&"domovoi": "Domovoi",
 	&"hiisi": "Hiisi",
@@ -144,6 +146,6 @@ func _rebuild() -> void:
 	for e in _entries:
 		var sp: StringName = e["speaker"]
 		var color: String = SPEAKER_COLORS.get(sp, "cfcfcf")
-		var name_text: String = SPEAKER_NAMES.get(sp, String(sp).capitalize())
+		var name_text: String = tr(SPEAKER_NAMES.get(sp, String(sp).capitalize()))
 		parts.append("[color=#%s]%s[/color]  %s" % [color, name_text, String(e["text"])])
 	text = "\n".join(parts)

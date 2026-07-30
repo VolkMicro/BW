@@ -75,6 +75,19 @@ done
 ```
 
 Done since the roadmap was written:
+- **RUSSIAN.** Menus, HUD, pause, lessons, the rite panel, village captions,
+  village NAMES, and the highest-traffic ~140 Voice pairs. The table is keyed
+  by the English source text, so anything not yet translated falls back to
+  readable English rather than to a placeholder key — the game degrades one
+  line at a time.
+  STILL ENGLISH, and the next translation batch: roughly half the Voice pairs
+  (campaign quests, Louhi's signs, the Avatar, missionaries, buildings,
+  offerings) and the quest titles in `campaign/quest_catalog.gd`.
+  To continue: dump the untranslated lines with the regex in
+  `docs/systems/localisation.md` and append rows to
+  `localization/strings.csv`.
+- **A main menu, settings, and audio that was written for this island** —
+  see the commits; `tools/synth_audio.py` generates every bed and cue.
 - **PLAYABILITY AUDIT written up in `docs/audit/playability_audit.md`** —
   first sixty seconds walked through, the numbers behind aiming, pace and
   Louhi's pressure, and the open findings ranked. Read it before touching

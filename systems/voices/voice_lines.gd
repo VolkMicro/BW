@@ -143,7 +143,16 @@ func pick_pair(trigger: StringName, context: Dictionary, recent: Array[String]) 
 	# Exactly the first two elements: a pair may carry a third (weight).
 	for i in 2:
 		var src: VoiceLine = chosen[i]
-		var text: String = src.text
+		# TRANSLATED BEFORE SUBSTITUTION, not after.
+		#
+		# The placeholders ({village}, {resource}) are part of the authored
+		# template, so the translation table is keyed by the template WITH them
+		# still in it and every translated line has to keep them. Translating
+		# after substitution would mean a table keyed by "Фенрайт-Лощина has
+		# eaten the last of it" — a different key for every village.
+		#
+		# TranslationServer rather than tr(): this is a RefCounted, not a Node.
+		var text: String = TranslationServer.translate(src.text)
 		if text.find("{") != -1:
 			text = text.format(placeholders)
 			# A substitution at the head of a line ("{village} has started
@@ -317,15 +326,21 @@ func _relic_display(context: Dictionary) -> String:
 func _rite_display(context: Dictionary) -> String:
 	var rid := _as_name(context.get("rite_id", context.get("best_guess", &"")))
 	if rid == &"":
-		return "no rite at all"
-	return String(rid).capitalize()
+		return TranslationServer.translate("no rite at all")
+	# The rite panel and the Voices must call a rite the same thing, so this
+	# goes through the same "ward"/"harvest" keys the grimoire uses.
+	return TranslationServer.translate(String(rid).replace("_", " "))
 
 ## Species/creature ids ("snow_hare", "unknown") spoken as plain words.
 func _creature_display(v: Variant, fallback: String) -> String:
 	var id := _as_name(v)
 	if id == &"" or id == &"unknown":
-		return fallback
-	return String(id).replace("_", " ")
+		return TranslationServer.translate(fallback)
+	# Species ids are invented creature names (rimefleece, snagbill, thawjaw).
+	# They are proper nouns of this world, so a Russian build transliterates
+	# them rather than translating them — but they still have to GO through the
+	# table, or a Russian sentence ends up with an English word wedged in it.
+	return TranslationServer.translate(String(id).replace("_", " "))
 
 func _thing_display(context: Dictionary) -> String:
 	var n := str(context.get("node_name", ""))

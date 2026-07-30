@@ -200,7 +200,7 @@ const OPENING_EXCHANGE: Array[Dictionary] = [
 	{"t": 1.5, "speaker": &"domovoi", "text": "You're awake. Fifteen villages on this rock, and not one of them has settled on what you are."},
 	{"t": 6.0, "speaker": &"hiisi", "text": "Two of them have barely heard of you at all. I say we introduce ourselves. Loudly."},
 	{"t": 11.0, "speaker": &"domovoi", "text": "Quietly. Hold the right mouse button and drag a shape over a village — that is a rite. They will feel it. Then they will argue about it for a week."},
-	{"t": 16.5, "speaker": &"hiisi", "text": "And when all three say your name without being asked, the island is yours and I am going to sleep for a year."},
+	{"t": 16.5, "speaker": &"hiisi", "text": "And when every one of them says your name without being asked, the island is yours and I am going to sleep for a year."},
 ]
 
 ## Two teaching nudges, fired only if the player has not discovered the thing
@@ -649,7 +649,7 @@ func _process(delta: float) -> void:
 		var beat: Dictionary = OPENING_EXCHANGE[_opening_index]
 		if _elapsed >= float(beat["t"]):
 			var speaker: StringName = beat["speaker"]
-			_voice_log.push_line(speaker, String(beat["text"]))
+			_voice_log.push_line(speaker, tr(String(beat["text"])))
 			_opening_index += 1
 
 	_slow_tick -= delta
