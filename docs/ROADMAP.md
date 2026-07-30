@@ -56,6 +56,26 @@ at that scale, and carries 15 villages planned onto the real terrain.
 Next: Phase 2, daily life.**
 
 Done since the roadmap was written:
+- **Escape pauses, saves, loads and leaves** (`ui/pause_menu.gd`). Before
+  this the only way out was closing the window and the only way to stop the
+  world was to stop playing. Pausing genuinely pauses: the layer is
+  PROCESS_MODE_ALWAYS over a paused tree, which matters beyond convenience —
+  the economy charges upkeep per second and Louhi counts down in real time,
+  so a menu that let the sim run would starve villages while the player read
+  the controls.
+- **Saving** (`core/save_game.gd`). Almost nothing is written down, because
+  almost nothing is authored: the island, the village sites and their names
+  are all pure functions of the seed, and 600 villagers mid-errand are
+  indistinguishable from a fresh scatter a second later. What is saved is
+  what the PLAYER changed — faith, devotion, stores, who Louhi holds and how
+  hard, epithets, scrolls, Naklon. Loading is applied OVER a normally booted
+  scene rather than reconstructing one, so a save cannot produce a world the
+  game could not have reached on its own.
+  JSON, not `ResourceSaver`: a `.tres` under user:// is a script-bearing
+  resource, which is a way to hand code execution to anything that can write
+  a file there.
+  Covered by `tests/save_test.tscn` — round trip, partial Louhi grip, and a
+  save naming a village this island does not have.
 - **You can tell the villages apart.** `ui/village_markers.gd` floats a name
   and one line of state over each one — who holds it, how convinced it is,
   whether it is hungry or out of firewood, and for a village Louhi holds, how

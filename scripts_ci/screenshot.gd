@@ -93,8 +93,17 @@ func _ready() -> void:
 	if not show_spec.is_empty():
 		for wanted in show_spec.split(","):
 			var n := _find_named(self, wanted.strip_edges())
-			if n is CanvasItem:
-				(n as CanvasItem).visible = true
+			if n == null:
+				continue
+			# open() where a panel has one (the pause menu also has to pause
+			# the tree and fill in its own status line), plain visibility
+			# otherwise. CanvasLayer is not a CanvasItem, so the obvious
+			# `n is CanvasItem` test silently skips exactly the overlays most
+			# worth photographing.
+			if n.has_method("open"):
+				n.call("open")
+			elif "visible" in n:
+				n.set("visible", true)
 		for i in range(3):
 			await get_tree().process_frame
 

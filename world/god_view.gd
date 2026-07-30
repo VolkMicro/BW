@@ -1204,6 +1204,6 @@ func _refresh_help_label() -> void:
 	var preset_text: String = GraphicsPreset.preset_name(_graphics_preset.current()) if _graphics_preset != null else "Low"
 	_help_label.text = (
 		"Mouse: aim the Hand   Hold Left Click: grip/throw   Hold Right Click + drag: draw a rite over a village\n" +
-		"Arrows: pan   Scroll: zoom   Middle-drag: orbit   3: rites you know   1: god view   2: walk into Fenrayt Hollow's Sanctum (Enter to interact)\n" +
+		"Arrows: pan   Scroll: zoom   Middle-drag: orbit   3: rites you know (shapes)   Esc: pause / save / leave   1: god view   2: walk into Fenrayt Hollow's Sanctum (Enter to interact)\n" +
 		"[ / ]: nudge Naklon toward Mercy / Cruelty   F / G: praise / chastise the Avatar   L: force Louhi to re-evaluate now   P: graphics preset (now: %s)" % preset_text
 	)
