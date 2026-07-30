@@ -130,7 +130,14 @@ func _ready() -> void:
 			# otherwise. CanvasLayer is not a CanvasItem, so the obvious
 			# `n is CanvasItem` test silently skips exactly the overlays most
 			# worth photographing.
-			if n.has_method("open"):
+			if n.has_method("open_for"):
+				# The village panel needs to be told WHICH village. Any of
+				# them will do for a screenshot; the first registered one is
+				# deterministic.
+				var ids: Array = GameState.villages.keys()
+				if not ids.is_empty():
+					n.call("open_for", ids[0], _find_crowd(self))
+			elif n.has_method("open"):
 				n.call("open")
 			elif "visible" in n:
 				n.set("visible", true)

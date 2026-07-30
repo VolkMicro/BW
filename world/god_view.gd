@@ -481,6 +481,24 @@ func _on_population_changed(village_id: StringName, new_population: int) -> void
 		buildings.queue_rebuild()
 
 
+## Opens the ledger for whichever village the Hand is over, or the nearest
+## one if it is over open ground. Closes it if it is already open.
+func _toggle_village_panel() -> void:
+	var panel := get_node_or_null(^"VillagePanel") as VillagePanel
+	if panel == null:
+		return
+	if panel.visible:
+		panel.close()
+		return
+	var at: Vector3 = _hand.get_target_position()
+	var v: Village = _village_in_reach_of(at)
+	if v == null:
+		v = _nearest_village(at)
+	if v == null:
+		return
+	panel.open_for(v.id, get_node_or_null(^"VillagerCrowd") as VillagerCrowd)
+
+
 ## THE HAND TAKES SOMETHING AND GIVES IT TO A VILLAGE.
 ##
 ## Bound to a key rather than to a mouse button because both buttons are
@@ -1428,6 +1446,11 @@ func _unhandled_input(event: InputEvent) -> void:
 			Naklon.shift(0.1, 1.0)
 		KEY_L:
 			_louhi.debug_force_evaluate()
+		KEY_TAB:
+			# The village under the Hand, in full. TAB rather than a click:
+			# both mouse buttons are the two verbs the game is built on, and
+			# a panel that opened on a mis-drawn sigil would be maddening.
+			_toggle_village_panel()
 		KEY_E:
 			_gather_under_hand()
 		KEY_4:
@@ -1453,6 +1476,6 @@ func _refresh_help_label() -> void:
 	var walkable_name: String = walkable.display_name if walkable != null else "Fenrayt Hollow"
 	_help_label.text = (
 		tr("Mouse: aim the Hand   Hold Left Click: grip/throw   Hold Right Click + drag: draw a rite over a village   E: pull up a tree or a rock and give it to the nearest village") + "\n" +
-		tr("Arrows: pan   Scroll: zoom   Middle-drag: orbit   3: rites you know (shapes)   Esc: pause / save / leave   1: god view   2: walk into %s's Sanctum (Enter to interact)") % walkable_name + "\n" +
+		tr("Arrows: pan   Scroll: zoom   Middle-drag: orbit   3: rites you know (shapes)   Tab: the village under your Hand   Esc: pause / save / leave   1: god view   2: walk into %s's Sanctum (Enter to interact)") % walkable_name + "\n" +
 		tr("[ / ]: nudge Naklon toward Mercy / Cruelty   F / G: praise / chastise the Avatar   4: find your creature   C: send it where you point   L: force Louhi to re-evaluate now   P: graphics preset (now: %s)") % tr(preset_text)
 	)

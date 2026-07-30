@@ -208,6 +208,56 @@ func count_job(village_id: StringName, job: int) -> int:
 	return counts[job]
 
 # ---------------------------------------------------------------------------
+# THE GOD LEANING ON A VILLAGE'S WORK
+#
+# A quota is an instruction, not a command: the villagers keep deciding for
+# themselves (see _decide), but a job the god has asked for is weighted up
+# until the village has as many people on it as was asked.
+#
+# Deliberately not a hard assignment. Pinning named individuals to jobs would
+# mean the whole needs-driven decision loop — hunger pulling hands onto food,
+# a storm sending everyone indoors, a damaged Sanctum pulling them onto the
+# roof — either fights the player or is switched off. A quota bends the same
+# loop instead: ask for six woodcutters and you will get six whenever six can
+# be spared, and fewer when the village is starving, which is the correct
+# answer and one the player does not have to micromanage back.
+# ---------------------------------------------------------------------------
+
+## village_id -> {job: wanted_count}. Absent job = no instruction.
+var _quotas: Dictionary = {}
+
+## How hard an unmet quota pulls. High enough to dominate the ordinary need
+## weights (which top out near 1.7), low enough that a starving village still
+## sends people to eat.
+const QUOTA_WEIGHT := 2.6
+
+func set_quota(village_id: StringName, job: int, wanted: int) -> void:
+	var q: Dictionary = _quotas.get(village_id, {})
+	if wanted <= 0:
+		q.erase(job)
+	else:
+		q[job] = wanted
+	_quotas[village_id] = q
+
+func get_quota(village_id: StringName, job: int) -> int:
+	return int(_quotas.get(village_id, {}).get(job, 0))
+
+func clear_quotas(village_id: StringName) -> void:
+	_quotas.erase(village_id)
+
+## How many people this village can be asked to reassign at all.
+func village_population(village_id: StringName) -> int:
+	var vi := _village_ids.find(village_id)
+	if vi < 0:
+		return 0
+	var n := 0
+	for i in _village.size():
+		if _village[i] == vi:
+			n += 1
+	return n
+
+
+# ---------------------------------------------------------------------------
 # Populating
 # ---------------------------------------------------------------------------
 
@@ -430,6 +480,17 @@ func _decide(i: int) -> void:
 			Job.FAMILY: 0.30,
 			Job.IDLE: 0.10,
 		}
+		# The god's standing instructions, applied on top of what the village
+		# would have chosen. Only jobs that are SHORT of their quota are
+		# boosted, so an order that has already been met stops pulling.
+		var quota: Dictionary = _quotas.get(vid, {})
+		for q_job in quota:
+			var wanted: int = int(quota[q_job])
+			var have: int = count_job(vid, q_job)
+			if have < wanted and weights.has(q_job):
+				var shortfall: float = float(wanted - have) / maxf(float(wanted), 1.0)
+				weights[q_job] = float(weights[q_job]) + QUOTA_WEIGHT * shortfall
+
 		job = _weighted_pick(weights)
 
 	var vi := _village[i]

@@ -1,4 +1,4 @@
-[gd_scene load_steps=30 format=3]
+[gd_scene load_steps=31 format=3]
 
 [ext_resource type="Environment" path="res://environment/world_environment.tres" id="1"]
 [ext_resource type="Script" path="res://world/god_view.gd" id="2"]
@@ -29,6 +29,7 @@
 [ext_resource type="Script" path="res://ui/village_markers.gd" id="27"]
 [ext_resource type="Script" path="res://ui/pause_menu.gd" id="28"]
 [ext_resource type="Script" path="res://ui/first_lessons.gd" id="29"]
+[ext_resource type="Script" path="res://ui/village_panel.gd" id="30"]
 
 [node name="GodView" type="Node3D"]
 script = ExtResource("2")
@@ -90,6 +91,9 @@ terrain_path = NodePath("../Island")
 script = ExtResource("4")
 size = Vector2(5200, 5200)
 subdivisions = 112
+
+[node name="VillagePanel" type="CanvasLayer" parent="."]
+script = ExtResource("30")
 
 [node name="FirstLessons" type="CanvasLayer" parent="."]
 script = ExtResource("29")
