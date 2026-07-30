@@ -222,6 +222,7 @@ enum Ending { NONE, VICTORY, DIVIDED, DEFEAT }
 @onready var _help_label: Label = $UI/HelpLabel
 @onready var _objective_label: Label = $UI/ObjectiveLabel
 @onready var _rites_label: RiteGrimoire = $UI/RitesLabel
+@onready var _first_lessons: FirstLessons = get_node_or_null(^"FirstLessons")
 @onready var _end_card: Label = $UI/EndCard
 @onready var _voice_log: VoiceLog = $UI/VoiceLog
 
@@ -695,6 +696,8 @@ func _on_rite_cast(rite_id: StringName, confidence: float) -> void:
 		# explain jurisdiction. This is the single most important teaching
 		# moment in the game — it is how a player learns Reach exists.
 		_hand.request_refusal_flash(&"rite_out_of_reach")
+		if _first_lessons != null:
+			_first_lessons.saw_rite_refused_out_of_reach = true
 		var nearest: Village = _nearest_village(world_pos)
 		Voices.react(&"offering_out_of_reach", {
 			"village_id": nearest.id if nearest != null else &"",
@@ -702,6 +705,8 @@ func _on_rite_cast(rite_id: StringName, confidence: float) -> void:
 		})
 		return
 
+	if _first_lessons != null:
+		_first_lessons.saw_rite_cast = true
 	if not _first_rite_cast:
 		_first_rite_cast = true
 		Voices.react(&"first_rite_cast", {"rite_id": rite_id, "village_id": target.id})
@@ -1184,6 +1189,8 @@ func _unhandled_input(event: InputEvent) -> void:
 			_camera_rig.frame_sanctum_interior(get_node(WALKABLE_SANCTUM_PATH))
 		KEY_3:
 			_rites_label.visible = not _rites_label.visible
+			if _rites_label.visible and _first_lessons != null:
+				_first_lessons.saw_rite_panel = true
 		KEY_P:
 			# environment/graphics_preset.gd: LOW -> MEDIUM -> HIGH -> LOW.
 			_graphics_preset.cycle()

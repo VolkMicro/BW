@@ -56,6 +56,14 @@ at that scale, and carries 15 villages planned onto the real terrain.
 Next: Phase 2, daily life.**
 
 Done since the roadmap was written:
+- **The first two minutes teach themselves** (`ui/first_lessons.gd`). One
+  sentence at a time, low centre, each watching for the thing it asked for
+  and clearing itself when the player does it. No "click to continue", no
+  forced camera, no modal; if the player works it out before being told, the
+  lesson is already satisfied and never appears. The reach lesson only shows
+  to someone who has just BEEN refused — until then it is a sentence about
+  nothing. Seen-ness lives in user config, not in the save: it is a fact
+  about the person, not the island, so a new game must not re-teach them.
 - **Escape pauses, saves, loads and leaves** (`ui/pause_menu.gd`). Before
   this the only way out was closing the window and the only way to stop the
   world was to stop playing. Pausing genuinely pauses: the layer is
