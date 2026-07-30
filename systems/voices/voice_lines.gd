@@ -72,6 +72,12 @@ const _PACING_COOLDOWN_MSEC := {
 	&"village_child_born": 25000,
 	&"village_child_matured": 25000,
 	&"stockpile_overflow": 30000,
+	&"gather_taken": 8000,
+	&"gather_nothing_here": 6000,
+	&"gather_no_village": 6000,
+	&"gather_stores_full": 9000,
+	&"gather_stripped": 25000,
+	&"avatar_sent": 12000,
 	&"village_grew": 20000,
 	&"village_shrank": 20000,
 	&"sigil_not_learned": 7000,
@@ -1002,6 +1008,63 @@ func _build_pairs() -> void:
 		_p("snl3",
 			"You know the shape of that one but not the whole of it. There is a scroll for it out there.",
 			"There is always a scroll. There is never a scroll where I am standing."),
+	]
+
+	# avatar_sent: {stage} — the god points, the creature goes.
+	_pairs[&"avatar_sent"] = [
+		_p("as1",
+			"It is going. Whether it remembers why by the time it arrives is another matter.",
+			"It never remembers why! That is the best thing about it!"),
+		_p("as2",
+			"Sent. Watch what it does when it gets there — that is the only way you will ever know what it has learned.",
+			"It will sit down. It always sits down first. Enormous ceremony about sitting down."),
+	]
+
+	# --- The Hand taking things out of the world (systems/economy/hand_gathering.gd)
+	# gather_taken / gather_nothing_here / gather_no_village /
+	# gather_stores_full / gather_stripped: {village_id, village_name, resource}
+	_pairs[&"gather_taken"] = [
+		_p("gt1",
+			"That went straight into {village}'s store. They will find it there and invent an explanation.",
+			"The explanation will be wrong and beautiful. I cannot wait."),
+		_p("gt2",
+			"{resource} for {village}, delivered by hand. Crude, effective, and entirely off the books.",
+			"OFF THE BOOKS. Domovoi. Say it again. Say it slower."),
+		_p("gt3",
+			"You have taken something real out of the island and put it somewhere useful. That is the whole job, most days.",
+			"Most days the job is eating. But yes. Yours too."),
+	]
+	_pairs[&"gather_nothing_here"] = [
+		_p("gn1",
+			"There is nothing there to take. Trees and stone, and neither within reach of that hand.",
+			"Take the grass! ...No? Nobody wants the grass. The grass and I understand each other."),
+		_p("gn2",
+			"Your hand closed on air. Find a tree, or a boulder, and try that instead.",
+			"Or a person. ...I am told not a person."),
+	]
+	_pairs[&"gather_no_village"] = [
+		_p("gv1",
+			"You are holding it and there is nobody near enough to give it to. Carry it closer.",
+			"Or keep it! Start a pile! I love a pile."),
+		_p("gv2",
+			"Nothing out here answers to anyone. A gift needs somebody to receive it.",
+			"A gift needs nothing of the sort. I have given gifts to a bog."),
+	]
+	_pairs[&"gather_stores_full"] = [
+		_p("gf1",
+			"{village} has nowhere to put it. Their store is already full to the roof.",
+			"Then tip it out anyway! Let them stand in it!"),
+		_p("gf2",
+			"No room in {village} for more {resource}. Give it to somebody who is short instead.",
+			"Somebody is ALWAYS short. That is the one reliable thing about people."),
+	]
+	_pairs[&"gather_stripped"] = [
+		_p("gs1",
+			"There is almost nothing left standing around {village}. Take the rest and their woodcutters have no work and no wood.",
+			"No work! Marvellous. They can take up something restful, like panicking."),
+		_p("gs2",
+			"That hillside is nearly bare. Wood you pull up now is wood they cannot cut next season.",
+			"Next season. You and your next seasons. Live a little."),
 	]
 
 	# --- The war for a taken village (systems/faith/reclaim.gd) -----------

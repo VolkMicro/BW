@@ -478,6 +478,52 @@ func _on_population_changed(village_id: StringName, new_population: int) -> void
 		buildings.queue_rebuild()
 
 
+## THE HAND TAKES SOMETHING AND GIVES IT TO A VILLAGE.
+##
+## Bound to a key rather than to a mouse button because both buttons are
+## already the two verbs this game is built on — left grips and throws, right
+## draws rites — and overloading either would mean every failed sigil risked
+## uprooting a forest.
+func _gather_under_hand() -> void:
+	if _ending != Ending.NONE:
+		return
+	var scatter := get_node_or_null(^"TerrainScatter")
+	var at: Vector3 = _hand.get_target_position()
+	var result := HandGathering.take_at(scatter, at)
+
+	if not result.ok:
+		_hand.request_refusal_flash(result.reason)
+		MusicDirector.play_rite_outcome(&"rite_refused", at)
+		# Three different failures, told apart on purpose: "there is nothing
+		# there", "nobody near enough to give it to" and "their barn is
+		# already full" ask the player for completely different next moves.
+		Voices.react(StringName("gather_%s" % result.reason), {
+			"village_id": result.village.id if result.has("village") else &"",
+			"village_name": result.village.display_name if result.has("village") else "",
+			"resource": String(result.get("resource", &"")),
+		})
+		return
+
+	RiteVFX.spawn(&"lumber" if result.resource == &"wood" else &"harvest", result.position, self)
+	MusicDirector.play_rite_outcome(&"rite_landed", result.position)
+	Voices.react(&"gather_taken", {
+		"village_id": result.village.id,
+		"village_name": result.village.display_name,
+		"resource": String(result.resource),
+	})
+
+	# Warn while the hillside can still recover, not once it is bare.
+	if result.kind == HandGathering.Harvest.TREE:
+		var left := HandGathering.count_remaining(scatter,
+			Vector2(result.position.x, result.position.z), 90.0)
+		if left >= 0 and left <= 6:
+			Voices.react(&"gather_stripped", {
+				"village_id": result.village.id,
+				"village_name": result.village.display_name,
+			})
+	_refresh_objective()
+
+
 ## Puts the camera on the creature, from a distance where it reads as an
 ## animal rather than as a dot.
 func _frame_avatar() -> void:
@@ -1350,6 +1396,8 @@ func _unhandled_input(event: InputEvent) -> void:
 			Naklon.shift(0.1, 1.0)
 		KEY_L:
 			_louhi.debug_force_evaluate()
+		KEY_E:
+			_gather_under_hand()
 		KEY_4:
 			# Find your creature. On a 1200 m island a bear is a speck, and
 			# before this there was no way to locate it at all.
@@ -1372,7 +1420,7 @@ func _refresh_help_label() -> void:
 	var walkable := GameState.get_village(&"isle_fenrayt_hollow")
 	var walkable_name: String = walkable.display_name if walkable != null else "Fenrayt Hollow"
 	_help_label.text = (
-		tr("Mouse: aim the Hand   Hold Left Click: grip/throw   Hold Right Click + drag: draw a rite over a village") + "\n" +
+		tr("Mouse: aim the Hand   Hold Left Click: grip/throw   Hold Right Click + drag: draw a rite over a village   E: pull up a tree or a rock and give it to the nearest village") + "\n" +
 		tr("Arrows: pan   Scroll: zoom   Middle-drag: orbit   3: rites you know (shapes)   Esc: pause / save / leave   1: god view   2: walk into %s's Sanctum (Enter to interact)") % walkable_name + "\n" +
 		tr("[ / ]: nudge Naklon toward Mercy / Cruelty   F / G: praise / chastise the Avatar   4: find your creature   C: send it where you point   L: force Louhi to re-evaluate now   P: graphics preset (now: %s)") % tr(preset_text)
 	)

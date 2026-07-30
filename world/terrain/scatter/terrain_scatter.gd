@@ -364,6 +364,98 @@ func _emit_multimeshes(kind: Kind, transforms: Array[Transform3D],
 	_draw_calls[kind] = made
 
 # ---------------------------------------------------------------------------
+# TAKING THINGS OUT OF THE WORLD
+#
+# The god's Hand pulls up trees and prises out boulders. Both are MultiMesh
+# instances, not nodes, so "removing" one means finding which instance of
+# which chunk was pointed at and collapsing its transform to nothing.
+#
+# Collapsing rather than rebuilding the MultiMesh: an instance_count change
+# reallocates and re-uploads the whole buffer, and a player pulling up a
+# forest one tree at a time would do that hundreds of times. A zero-scale
+# instance costs a degenerate triangle the rasteriser discards immediately.
+# The slot is remembered as taken so it is never counted again.
+# ---------------------------------------------------------------------------
+
+## Instances that have been pulled out, per kind: {kind: {mmi_name: {index: true}}}
+var _taken: Dictionary = {}
+
+## The nearest standing instance of `kind` within `radius` of a world XZ.
+##
+## Returns {} when there is nothing, otherwise
+## {"node": MultiMeshInstance3D, "index": int, "position": Vector3}.
+func find_nearest(kind: Kind, world_xz: Vector2, radius: float) -> Dictionary:
+	var best := {}
+	var best_d := radius * radius
+	var prefix := _kind_name(kind)
+	for child in get_children():
+		if not (child is MultiMeshInstance3D):
+			continue
+		var mmi: MultiMeshInstance3D = child
+		if not String(mmi.name).begins_with(prefix):
+			continue
+		var taken: Dictionary = _taken.get(kind, {}).get(mmi.name, {})
+		var mm: MultiMesh = mmi.multimesh
+		for i in mm.instance_count:
+			if taken.has(i):
+				continue
+			var o: Vector3 = mm.get_instance_transform(i).origin + mmi.global_position
+			var dx: float = o.x - world_xz.x
+			var dz: float = o.z - world_xz.y
+			var d: float = dx * dx + dz * dz
+			if d < best_d:
+				best_d = d
+				best = {"node": mmi, "index": i, "position": o}
+	return best
+
+
+## Pulls one out. `hit` is whatever `find_nearest` returned.
+func take(kind: Kind, hit: Dictionary) -> bool:
+	if hit.is_empty():
+		return false
+	var mmi: MultiMeshInstance3D = hit.node
+	if mmi == null or not is_instance_valid(mmi):
+		return false
+	var index: int = hit.index
+	var by_kind: Dictionary = _taken.get(kind, {})
+	var taken: Dictionary = by_kind.get(mmi.name, {})
+	if taken.has(index):
+		return false
+	taken[index] = true
+	by_kind[mmi.name] = taken
+	_taken[kind] = by_kind
+
+	var xf: Transform3D = mmi.multimesh.get_instance_transform(index)
+	mmi.multimesh.set_instance_transform(index, Transform3D(Basis().scaled(Vector3.ZERO), xf.origin))
+	return true
+
+
+## How many of `kind` are still standing within `radius`. Used to tell the
+## player when a hillside has been stripped.
+func count_near(kind: Kind, world_xz: Vector2, radius: float) -> int:
+	var r2 := radius * radius
+	var n := 0
+	var prefix := _kind_name(kind)
+	for child in get_children():
+		if not (child is MultiMeshInstance3D):
+			continue
+		var mmi: MultiMeshInstance3D = child
+		if not String(mmi.name).begins_with(prefix):
+			continue
+		var taken: Dictionary = _taken.get(kind, {}).get(mmi.name, {})
+		var mm: MultiMesh = mmi.multimesh
+		for i in mm.instance_count:
+			if taken.has(i):
+				continue
+			var o: Vector3 = mm.get_instance_transform(i).origin + mmi.global_position
+			var dx: float = o.x - world_xz.x
+			var dz: float = o.z - world_xz.y
+			if dx * dx + dz * dz <= r2:
+				n += 1
+	return n
+
+
+# ---------------------------------------------------------------------------
 # Placement rules
 # ---------------------------------------------------------------------------
 
