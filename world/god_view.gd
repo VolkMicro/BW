@@ -251,9 +251,24 @@ var _nudged_camera: bool = false
 var _nudged_rite: bool = false
 
 
+## GODOT_PROFILE_STARTUP=1 prints how long each part of building the world
+## takes. Added because "the game shows a grey screen for five minutes" is a
+## report, not a diagnosis, and the only way to answer it is to time the
+## pieces separately on the machine that is slow.
+@onready var _profile_startup: bool = OS.get_environment("GODOT_PROFILE_STARTUP") != ""
+var _t_phase: int = 0
+
 func _ready() -> void:
+	_t_phase = Time.get_ticks_msec()
+	if _profile_startup:
+		var isl := get_node_or_null(^"Island")
+		if isl != null:
+			print("STARTUP island (noise + erosion + mesh, already done in its own _ready) — see below")
 	# _build_far_sea() is deliberately NOT called — see its own comment.
 	_place_villages_and_villagers()
+	if _profile_startup:
+		print("STARTUP villages+crowd+buildings %d ms" % (Time.get_ticks_msec() - _t_phase))
+		_t_phase = Time.get_ticks_msec()
 	_place_avatar_and_hand()
 	_wire_campaign_and_louhi()
 	_wire_gameplay_loop()
@@ -405,26 +420,45 @@ func _place_villages_and_villagers() -> void:
 	# wishes, and nothing at all about the twelve planned villages. Rather than
 	# scatter grass through fifteen settlements, it now waits: the exclusions go
 	# in here, once every village has its final position, and it builds after.
+	# SCATTER IS BUILT AFTER THE FIRST FRAME, not before it.
+	#
+	# Measured on this machine: scatter is 1348 ms of a 2637 ms world build —
+	# more than the island, the villages and the crowd put together. Every one
+	# of those milliseconds is time the window sits grey with nothing drawn in
+	# it, and on a slower CPU the whole build multiplies.
+	#
+	# Nothing depends on the scatter existing: the villages are already placed,
+	# their exclusions are already registered, and the terrain underneath is
+	# already there. So the island, the sea and the settlements are on screen
+	# roughly twice as fast, and the grass and trees arrive a frame later. The
+	# player sees their island appear and then furnish itself, instead of
+	# watching a grey rectangle for the sum of both.
 	var scatter := get_node_or_null(^"TerrainScatter")
 	if scatter:
 		for v_id in GameState.villages:
 			var vv: Village = GameState.villages[v_id]
 			scatter.add_exclusion(vv.position_on_island, 30.0)
-		scatter.rebuild()
+		_build_scatter_after_first_frame(scatter)
 
 	# Every village is registered now, so the crowd can be built. This is the
 	# _ready() ordering trap documented in world/sanctum/sanctum_demo.gd:
 	# children run their _ready() before their parent, so VillagerCrowd cannot
 	# populate itself — at its own _ready() GameState is still empty.
+	var t_crowd := Time.get_ticks_msec()
 	var crowd := get_node_or_null(^"VillagerCrowd") as VillagerCrowd
 	if crowd:
 		crowd.populate()
+	if _profile_startup:
+		print("STARTUP crowd %d ms" % (Time.get_ticks_msec() - t_crowd))
 	# Same ordering reason: houses need the villages' final positions, and the
 	# temple superstructure needs every Sanctum to have finished its own
 	# _ready() (it has, children run first).
+	var t_build := Time.get_ticks_msec()
 	var buildings := get_node_or_null(^"VillageBuildings") as VillageBuildings
 	if buildings:
 		buildings.build()
+	if _profile_startup:
+		print("STARTUP village buildings %d ms" % (Time.get_ticks_msec() - t_build))
 	# Same ordering reason again: the markers need every village's final
 	# terrain-resolved position to float above the right piece of ground.
 	var markers := get_node_or_null(^"VillageMarkers") as VillageMarkers
@@ -558,6 +592,16 @@ func _gather_under_hand() -> void:
 				"village_name": result.village.display_name,
 			})
 	_refresh_objective()
+
+
+func _build_scatter_after_first_frame(scatter: Node) -> void:
+	await get_tree().process_frame
+	var t_scatter := Time.get_ticks_msec()
+	if is_instance_valid(scatter):
+		scatter.call("rebuild")
+	if _profile_startup:
+		print("STARTUP scatter (deferred, after first frame) %d ms"
+			% (Time.get_ticks_msec() - t_scatter))
 
 
 ## Puts the camera on the creature, from a distance where it reads as an

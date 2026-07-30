@@ -56,7 +56,22 @@ func _ready() -> void:
 ## Rebuilds the mesh + collision from the current seed/size/resolution.
 ## Safe to call at runtime (e.g. a debug "reroll island" action) — geometry
 ## and collision are fully replaced, nothing is appended.
+## Prints how long generation took when GODOT_PROFILE_STARTUP is set. This is
+## the single most expensive thing that happens before the first frame, and on
+## a slow CPU it is the difference between a two-second wait and a minute of
+## grey window — so it has to be measurable on the machine that is slow, not
+## only on the one that is fast.
 func regenerate() -> void:
+	var _t0 := Time.get_ticks_msec()
+	_regenerate_inner()
+	if OS.get_environment("GODOT_PROFILE_STARTUP") != "":
+		print("STARTUP island %d m / res %d / %d droplets: %d ms"
+			% [size_meters, resolution,
+			   generator.erosion_droplets if generator != null else -1,
+			   Time.get_ticks_msec() - _t0])
+
+
+func _regenerate_inner() -> void:
 	generator = IslandGenerator.new()
 	generator.island_seed = island_seed
 	generator.size_meters = size_meters

@@ -9,7 +9,7 @@ config_version=5
 config/name="TITHE & TERROR"
 config/description="A god-sim / life-sim hybrid over the Ninefold Sea. Unnamed god, one rival, two bickering spirits, and a beast that learns."
 run/main_scene="res://ui/main_menu.tscn"
-config/features=PackedStringArray("4.3", "Mobile")
+config/features=PackedStringArray("4.7", "Mobile")
 boot_splash/bg_color=Color(0.043, 0.047, 0.058, 1)
 config/icon="res://icon.svg"
 

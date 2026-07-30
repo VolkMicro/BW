@@ -75,6 +75,20 @@ done
 ```
 
 Done since the roadmap was written:
+- **Engine updated 4.3 → 4.7.1 in one step.** Every test passed unchanged, no
+  script errors, identical render. `godot43` is kept on the dev machine to
+  bisect against. Nothing in 4.7 helps this project directly — see
+  `docs/systems/startup_time.md` for what was considered and rejected.
+- **The grey screen at startup is fixed, and measured.** Scatter was 1348 ms
+  of a 2637 ms world build and nothing depends on it, so it now builds AFTER
+  the first frame: 2637 → 1409 ms before anything can be drawn. The main menu
+  also draws a loading veil and waits two frames before changing scene, and
+  because Godot keeps presenting the last drawn frame, that veil is what
+  stays up during the blocking build. Full phase table and the separate
+  question of the FIVE-minute wait (first-time import, or shader compilation
+  on an Intel driver — both once-per-machine) in
+  `docs/systems/startup_time.md`. `GODOT_PROFILE_STARTUP=1` prints the
+  breakdown on any machine.
 - **RUSSIAN.** Menus, HUD, pause, lessons, the rite panel, village captions,
   village NAMES, and the highest-traffic ~140 Voice pairs. The table is keyed
   by the English source text, so anything not yet translated falls back to

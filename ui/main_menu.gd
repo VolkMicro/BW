@@ -266,7 +266,24 @@ func _on_continue() -> void:
 	_start_world(true)
 
 
+## WHY THERE IS A VEIL BEFORE THE SCENE CHANGE
+##
+## Building the world blocks the main thread. Measured on the development
+## machine with a warm cache: 1.4 s before the first frame can be drawn, and
+## that is a fast desktop — on the laptop this is built for it is several
+## times that. Godot keeps presenting the LAST frame it drew while the new
+## scene's _ready() runs, and with nothing drawn that last frame is an empty
+## window. That is the grey screen: not a hang, but the engine faithfully
+## showing nothing because nothing was ever put on screen.
+##
+## So: draw something first, then hand over. Two frames of wait rather than
+## one, because the first only queues the redraw.
 func _start_world(load_after: bool = false) -> void:
+	_show_veil(tr("Raising the island…") if not load_after
+		else tr("Finding where you left off…"))
+	await get_tree().process_frame
+	await get_tree().process_frame
+
 	var world: PackedScene = load("res://world/god_view.tscn")
 	get_tree().change_scene_to_packed(world)
 	if load_after:
@@ -276,6 +293,38 @@ func _start_world(load_after: bool = false) -> void:
 		await get_tree().process_frame
 		await get_tree().process_frame
 		SaveGame.load_into_world()
+
+
+func _show_veil(text: String) -> void:
+	var veil := ColorRect.new()
+	veil.name = "LoadingVeil"
+	veil.color = Color(0.045, 0.05, 0.062)
+	veil.set_anchors_preset(Control.PRESET_FULL_RECT)
+	veil.mouse_filter = Control.MOUSE_FILTER_STOP
+	add_child(veil)
+
+	var box := VBoxContainer.new()
+	box.set_anchors_preset(Control.PRESET_CENTER)
+	box.grow_horizontal = Control.GROW_DIRECTION_BOTH
+	box.grow_vertical = Control.GROW_DIRECTION_BOTH
+	box.alignment = BoxContainer.ALIGNMENT_CENTER
+	box.add_theme_constant_override("separation", 12)
+	veil.add_child(box)
+
+	var title := Label.new()
+	title.text = text
+	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	title.add_theme_font_size_override("font_size", 24)
+	box.add_child(title)
+
+	# Says what is actually happening, and why the wait is once rather than
+	# every time. A wait somebody understands is a much shorter wait.
+	var note := Label.new()
+	note.text = tr("Carving the coastline, running the rivers, and finding fifteen places worth living.\nThe island is cached afterwards, so this is slowest the first time.")
+	note.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	note.add_theme_font_size_override("font_size", 14)
+	note.modulate = Color(0.62, 0.65, 0.72)
+	box.add_child(note)
 
 
 func _on_open_settings() -> void:

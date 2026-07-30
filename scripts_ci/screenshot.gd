@@ -44,8 +44,18 @@ func _ready() -> void:
 		get_tree().quit(1)
 		return
 
+	# SHOT_TIME_PHASES: how long the world actually takes to come up, split by
+	# phase. The project owner reports a five-minute grey screen on their
+	# laptop, and "the game is slow to start" is not a diagnosis — this says
+	# which part.
+	var t_start := Time.get_ticks_msec()
 	var instance := packed.instantiate()
+	var t_instanced := Time.get_ticks_msec()
 	add_child(instance)
+	var t_ready := Time.get_ticks_msec()
+	if OS.get_environment("SHOT_TIME_PHASES") != "":
+		print("PHASE instantiate (loads every script and scene) %d ms" % (t_instanced - t_start))
+		print("PHASE _ready    (terrain, erosion, scatter, villages, crowd) %d ms" % (t_ready - t_instanced))
 
 	# SHOT_DAY_PHASE=0..1: jump the world clock (0 = sunrise, 0.25 = noon,
 	# 0.5 = sunset, 0.75 = midnight). The day is ten real minutes long, so
@@ -54,8 +64,14 @@ func _ready() -> void:
 	if not phase_spec.is_empty():
 		Weather.set("_elapsed", float(phase_spec) * Weather.DAY_LENGTH_SECONDS)
 
+	var t_first := Time.get_ticks_msec()
+	await get_tree().process_frame
+	if OS.get_environment("SHOT_TIME_PHASES") != "":
+		print("PHASE first frame (shader/pipeline compilation) %d ms" % (Time.get_ticks_msec() - t_first))
 	for i in range(frames):
 		await get_tree().process_frame
+	if OS.get_environment("SHOT_TIME_PHASES") != "":
+		print("PHASE %d further frames %d ms" % [frames, Time.get_ticks_msec() - t_first])
 
 	# SHOT_DUMP_VILLAGES: print every registered village with its final,
 	# terrain-resolved position. The layout is planned at runtime now
